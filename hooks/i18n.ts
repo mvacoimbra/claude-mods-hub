@@ -5,6 +5,9 @@ export type HubStrings = {
   title: string
   overview: string
   settings: string
+  components: string
+  toast: string
+  status: (time: string) => string
   open: string
   on: string
   off: string
@@ -22,6 +25,9 @@ const en: HubStrings = {
   title: 'Mods',
   overview: 'Overview',
   settings: 'Settings',
+  components: 'Components',
+  toast: 'This is a toast: $.ui.toast(text)',
+  status: time => `mods: $.ui.status set at ${time}`,
   open: 'Open',
   on: 'on',
   off: 'off',
@@ -39,6 +45,9 @@ const pt: HubStrings = {
   title: 'Mods',
   overview: 'Visão geral',
   settings: 'Ajustes',
+  components: 'Componentes',
+  toast: 'Isto é um toast: $.ui.toast(texto)',
+  status: time => `mods: $.ui.status definido às ${time}`,
   open: 'Abrir',
   on: 'ligado',
   off: 'desligado',

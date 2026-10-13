@@ -2,6 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderElement, Timer } from 'claude-code'
 
 import type { ModsActArgs, ModsActResult, ModsItem, ModsLang, ModsPanel, ModsPanelArgs, ModsTone } from '../types'
+import { componentsTab, DEMO_START } from './components'
+import type { DemoState, DemoUi } from './components'
 import { HUB_STRINGS } from './i18n'
 import type { HubStrings } from './i18n'
 
@@ -22,6 +24,7 @@ const tabAtom = atom({ plugin: 'mods', key: 'tab' } as const, 'overview')
 const sectionsAtom = atom({ plugin: 'mods', key: 'sections' } as const, {} as Record<string, string>)
 const revisionAtom = atom({ plugin: 'mods', key: 'revision' } as const, 0)
 const langAtom = atom({ plugin: 'mods', key: 'lang' } as const, 'en' as ModsLang)
+const demoAtom = atom({ plugin: 'mods', key: 'demo' } as const, DEMO_START as DemoState)
 
 // Each mod's noun, spelled out: `$` is only ever called by name. A mod that is not
 // installed has no noun on `$`, so the call throws before reaching it.
@@ -148,7 +151,7 @@ export const register: Register = on => {
     const wide = columns >= WIDE
     const mods = await loadAll($, { lang, surface: e.surface, columns: Math.max(20, columns - 2) })
     const stored = await read($, tabAtom)
-    const tab = stored === 'overview' || stored === 'settings' || mods.some(mod => mod.noun === stored) ? stored : 'overview'
+    const tab = stored === 'overview' || stored === 'settings' || stored === 'components' || mods.some(mod => mod.noun === stored) ? stored : 'overview'
     const current = mods.find(mod => mod.noun === tab)
 
     // A countdown on the open tab draws again on its own; the overview shows every summary.
@@ -318,7 +321,7 @@ export const register: Register = on => {
 
     const tabs = (
       <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
-        {[{ id: 'overview', title: t.overview }, ...mods.map(mod => ({ id: mod.noun, title: mod.panel.title })), { id: 'settings', title: t.settings }].map(
+        {[{ id: 'overview', title: t.overview }, ...mods.map(mod => ({ id: mod.noun, title: mod.panel.title })), { id: 'components', title: t.components }, { id: 'settings', title: t.settings }].map(
           (entry, i) => (
             <Button
               key={`tab-${entry.id}`}
@@ -406,7 +409,28 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column" rowGap={1}>
         {tabs}
-        {tab === 'overview' ? overview : tab === 'settings' ? settings : current === undefined ? overview : modTab(current)}
+        {tab === 'overview'
+          ? overview
+          : tab === 'settings'
+            ? settings
+            : tab === 'components'
+              ? componentsTab(ui as unknown as DemoUi, e.surface, columns, lang, await read($, demoAtom), {
+                  section: id => void update($, demoAtom, demo => ({ ...demo, section: id })),
+                  click: () => void update($, demoAtom, demo => ({ ...demo, clicks: demo.clicks + 1 })),
+                  type: value => void update($, demoAtom, demo => ({ ...demo, typed: value })),
+                  submit: value => void update($, demoAtom, demo => ({ ...demo, submitted: value, typed: '' })),
+                  pick: value => void update($, demoAtom, demo => ({ ...demo, picked: value })),
+                  toast: () => $.ui.toast(t.toast),
+                  status: () =>
+                    void (async () => {
+                      const time = new Date(await $.clock.now()).toTimeString().slice(0, 8)
+                      $.ui.status(t.status(time))
+                      $.clock.after(8000, () => $.ui.status(undefined))
+                    })(),
+                })
+              : current === undefined
+                ? overview
+                : modTab(current)}
         <Text color="subtle">{t.footer}</Text>
       </Box>
     )

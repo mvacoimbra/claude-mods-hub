@@ -42,6 +42,8 @@ declare module 'claude-code' {
       // Bumped after a press or a refresh tick, so the pane draws again from fresh panels.
       revision: number
       lang: ModsLang
+      // The Components tab's open section and what its demos were last given.
+      demo: { section: string; clicks: number; typed: string; submitted: string; picked: string }
     }
   }
 }
