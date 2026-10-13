@@ -33,7 +33,7 @@ function fakeMod(on: On) {
   on('engine.create', async ($, e, next) => {
     const built = await next(e)
 
-    return { ...built, cachetax: { panel: async () => ({ title: '', sections: [] }), act: async () => ({}) } }
+    return { ...built, cachetax: { panel: async () => ({ title: '', sections: [] }), act: async () => ({}), catalog: async () => [] } }
   })
   on('cachetax.panel', ($, e) => {
     asked.panels.push(e)
@@ -61,6 +61,12 @@ function fakeMod(on: On) {
 
     return { value: panel }
   })
+  on('cachetax.catalog', ($, e) => ({
+    value: [
+      { id: 'band-warm', name: e.lang === 'pt' ? 'Linha da faixa: aquecido' : 'Band row: warm', help: 'above the prompt', tree: { type: 'Text', props: { color: 'success' }, children: ['cache-tax · warm'] } },
+      { id: 'band-cold', name: 'Band row: cold', tree: { type: 'Text', props: {}, children: ['cache-tax · cold'] } },
+    ],
+  }))
   on('cachetax.act', ($, e) => {
     asked.acts.push(e)
     if (e.id === 'always') warm = e.value === 'on'
@@ -183,46 +189,84 @@ test('a tab that counts down draws again on its own while it shows', async ($, o
   await pane.unmount()
 })
 
-test('the Components tab draws every section on both surfaces, with each surface’s own graphics', async ($, on) => {
+const ELEMENTS = ['box', 'text', 'button', 'input', 'select', 'link', 'code', 'markdown', 'svg', 'raster', 'image', 'client']
+
+test('the Components tab draws every element with its props, the colours, sites and outside calls, on both surfaces', async ($, on) => {
   stub(on)
-  const sections = ['layout', 'text', 'controls', 'content', 'graphics', 'colors', 'sites']
 
   for (const surface of SURFACES) {
     for (const columns of [90, 50]) {
       const pane = await $.ui.mount({ ...PANE, surface, props: { ...PANE.props, bodyColumns: columns } })
       await pane.press({ key: 'tab-components' })
 
-      for (const section of sections) {
-        await pane.press({ key: `section-components-${section}` })
-        expect((await pane.find({ key: `section-components-${section}` }))?.props.label, `${surface} ${columns} ${section}`).toMatch(/^● /)
+      for (const element of ELEMENTS) {
+        await pane.press({ key: `element-${element}` })
+        expect((await pane.find({ key: `element-${element}` }))?.props.label, `${surface} ${columns} ${element}`).toMatch(/^● /)
       }
 
-      await pane.press({ key: 'section-components-graphics' })
+      await pane.press({ key: 'element-box' })
+      expect(await pane.find({ type: 'Text', text: 'Box · justifyContent: space-evenly' })).toBeDefined()
+      expect(await pane.find({ type: 'Text', text: 'Box · borderStyle: arrow' })).toBeDefined()
+      await pane.press({ key: 'element-text' })
+      expect(await pane.find({ type: 'Text', text: 'Text · wrap: truncate-middle' })).toBeDefined()
+      await pane.press({ key: 'element-svg' })
       expect(await pane.find({ type: 'Svg' }), surface).toEqual(surface === 'desktop' ? expect.anything() : undefined)
-      expect(await pane.find({ key: 'demo-raster' }), surface).toEqual(surface === 'terminal' ? expect.anything() : undefined)
-      expect(await pane.find({ key: 'demo-client' })).toBeDefined()
-      await pane.press({ key: 'section-components-layout' })
+      await pane.press({ key: 'element-raster' })
+      expect(await pane.find({ type: 'Raster' }), surface).toEqual(surface === 'terminal' ? expect.anything() : undefined)
+      await pane.press({ key: 'element-image' })
+      expect(await pane.find({ type: 'Image' }), surface).toEqual(surface === 'terminal' ? expect.anything() : undefined)
+
+      for (const group of ['colors', 'sites', 'outside', 'mods', 'elements']) {
+        await pane.press({ key: `group-${group}` })
+        expect((await pane.find({ key: `group-${group}` }))?.props.label, `${surface} ${columns} ${group}`).toMatch(/^● /)
+      }
+
+      await pane.press({ key: 'element-box' })
       await pane.unmount()
     }
   }
 })
 
-test('the Components tab’s demos answer: a button counts, a field echoes, a select picks', async ($, on) => {
+test('the Components tab’s demos answer: a button counts, a field echoes, a select picks, a link press counts', async ($, on) => {
   stub(on)
   const pane = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await pane.press({ key: 'tab-components' })
-  await pane.press({ key: 'section-components-controls' })
-
+  await pane.press({ key: 'element-button' })
   await pane.press({ key: 'demo-primary' })
   await pane.press({ key: 'demo-plain' })
   expect(await pane.find({ type: 'Text', text: 'pressed 2 times' })).toBeDefined()
 
+  await pane.press({ key: 'element-input' })
   await pane.input({ key: 'demo-input', text: 'hello', kind: 'change' })
   expect(await pane.find({ type: 'Text', text: 'onInput: "hello"' })).toBeDefined()
   await pane.input({ key: 'demo-input', text: 'hello' })
   expect(await pane.find({ type: 'Text', text: 'onSubmit: "hello"' })).toBeDefined()
 
+  await pane.press({ key: 'element-select' })
   await pane.select({ key: 'demo-select', value: 'c' })
-  expect(await pane.find({ type: 'Text', text: 'picked: c' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'onSelect: c' })).toBeDefined()
+  await pane.press({ key: 'element-box' })
   await pane.unmount()
 })
+
+test('Your mods lists each installed mod’s named components, drawn, with their ids', async ($, on) => {
+  stub(on)
+  fakeMod(on)
+
+  for (const surface of SURFACES) {
+    const pane = await $.ui.mount({ ...PANE, surface })
+    await pane.press({ key: 'tab-components' })
+    await pane.press({ key: 'group-mods' })
+    await pane.press({ key: 'catalog-cachetax' })
+
+    expect(await pane.find({ type: 'Text', text: '1. Band row: warm  id: band-warm' })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: 'cache-tax · cold' })).toBeDefined()
+    expect(await pane.find({ key: 'catalog-skins' }), 'a mod that is not installed is not listed').toBeUndefined()
+    await pane.press({ key: 'catalog-blast' })
+    expect(await pane.find({ type: 'Text', text: 'blast-radius is not installed, or has no catalog.' })).toBeDefined()
+    await pane.press({ key: 'catalog-cachetax' })
+    await pane.press({ key: 'group-elements' })
+    await pane.unmount()
+  }
+})
+
