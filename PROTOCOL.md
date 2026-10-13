@@ -86,3 +86,32 @@ on('cachetax.act', async ($, e) => ({ value: await actOn($, e) }))
   in English.
 - Keys are the hub's: `tab-<noun>`, `section-<noun>-<section>`, `item-<noun>-<id>` and
   `item-<noun>-<id>-<option>` for a choice's buttons.
+
+## The catalog (optional)
+
+The hub's Components tab shows, beside the API's own elements, every named component each mod
+draws, live, so a person can point at one and ask for a change. A mod joins it with a third
+method on its noun:
+
+```ts
+export type CachetaxCatalogEntry = {
+  // Stable, kebab-case: what a person names when asking for a change.
+  id: string
+  // The component's name, as a person would say it ("Usage band, nudging to compact").
+  name: string
+  // One line on what it is and where it shows.
+  help?: string
+  // The component drawn for `args.surface` at `args.columns`, from the same builders the mod
+  // draws it with in place, in a state worth seeing. Static: a press cannot cross to the mod.
+  tree: unknown
+}
+
+// on EngineInterface, beside panel and act:
+catalog: (args: CachetaxPanelArgs) => Promise<CachetaxCatalogEntry[]>
+```
+
+Entries come in the order the mod wants them read; several states of one component are
+separate entries (`tool-row-running`, `tool-row-failed`). A component that one surface does not
+draw is left out on that surface, or drawn as a short `Text` saying where it shows. `name` and
+`help` follow `args.lang` (English when the mod does not speak it); `id` never changes.
+

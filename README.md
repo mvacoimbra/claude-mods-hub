@@ -11,7 +11,7 @@ settings and its actions, all drawn alike; the mods themselves register no slash
 | Files | [filetree](https://github.com/mvacoimbra/claude-code-filetree) | Open or close the file tree, show another folder, and every filetree setting |
 | Agents | [savvy-progress](https://github.com/mvacoimbra/claude-kit) | Running, finished and planned subagents, the current flow, and the agents panel |
 | Replay | [replay-theater](https://github.com/mvacoimbra/claude-code-playground) | Step through the last turn's edits |
-| Components | | A live catalog of every element a mod can draw (Box, Text, Button, Input, Select, Link, Code, Markdown, Svg, Raster, Image, Client), the theme colours and the sites a mod draws in, with working examples on the surface you are on |
+| Components | | Everything a mod can draw or do, named and live: every element with every prop and value (Box, Text, Button, Input, Select, Link, Code, Markdown, Svg, Raster, Image, Client), the theme colours, the sites a mod draws in, the calls outside a drawing (toast, notify, ask, status, copy, panes), and every named component of each installed mod, from its catalog |
 | Settings | | The language of the pane and of every tab: English or Português |
 
 A mod that is not installed has no tab. The digits switch tabs, Tab and the arrows move, Esc closes.
