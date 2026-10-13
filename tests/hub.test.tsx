@@ -182,3 +182,47 @@ test('a tab that counts down draws again on its own while it shows', async ($, o
   expect(asked.panels.length).toBeGreaterThan(before)
   await pane.unmount()
 })
+
+test('the Components tab draws every section on both surfaces, with each surface’s own graphics', async ($, on) => {
+  stub(on)
+  const sections = ['layout', 'text', 'controls', 'content', 'graphics', 'colors', 'sites']
+
+  for (const surface of SURFACES) {
+    for (const columns of [90, 50]) {
+      const pane = await $.ui.mount({ ...PANE, surface, props: { ...PANE.props, bodyColumns: columns } })
+      await pane.press({ key: 'tab-components' })
+
+      for (const section of sections) {
+        await pane.press({ key: `section-components-${section}` })
+        expect((await pane.find({ key: `section-components-${section}` }))?.props.label, `${surface} ${columns} ${section}`).toMatch(/^● /)
+      }
+
+      await pane.press({ key: 'section-components-graphics' })
+      expect(await pane.find({ type: 'Svg' }), surface).toEqual(surface === 'desktop' ? expect.anything() : undefined)
+      expect(await pane.find({ key: 'demo-raster' }), surface).toEqual(surface === 'terminal' ? expect.anything() : undefined)
+      expect(await pane.find({ key: 'demo-client' })).toBeDefined()
+      await pane.press({ key: 'section-components-layout' })
+      await pane.unmount()
+    }
+  }
+})
+
+test('the Components tab’s demos answer: a button counts, a field echoes, a select picks', async ($, on) => {
+  stub(on)
+  const pane = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await pane.press({ key: 'tab-components' })
+  await pane.press({ key: 'section-components-controls' })
+
+  await pane.press({ key: 'demo-primary' })
+  await pane.press({ key: 'demo-plain' })
+  expect(await pane.find({ type: 'Text', text: 'pressed 2 times' })).toBeDefined()
+
+  await pane.input({ key: 'demo-input', text: 'hello', kind: 'change' })
+  expect(await pane.find({ type: 'Text', text: 'onInput: "hello"' })).toBeDefined()
+  await pane.input({ key: 'demo-input', text: 'hello' })
+  expect(await pane.find({ type: 'Text', text: 'onSubmit: "hello"' })).toBeDefined()
+
+  await pane.select({ key: 'demo-select', value: 'c' })
+  expect(await pane.find({ type: 'Text', text: 'picked: c' })).toBeDefined()
+  await pane.unmount()
+})
