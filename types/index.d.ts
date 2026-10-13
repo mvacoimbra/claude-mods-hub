@@ -32,6 +32,9 @@ export type ModsActArgs = { id: string; value?: string }
 
 export type ModsActResult = { message?: string }
 
+// One named component a mod draws, for the Components tab (PROTOCOL.md, the catalog).
+export type ModsCatalogEntry = { id: string; name: string; help?: string; tree: unknown }
+
 declare module 'claude-code' {
   interface PluginState {
     mods: {
@@ -43,7 +46,7 @@ declare module 'claude-code' {
       revision: number
       lang: ModsLang
       // The Components tab's open section and what its demos were last given.
-      demo: { section: string; clicks: number; typed: string; submitted: string; picked: string }
+      demo: { group: string; element: string; mod: string; clicks: number; typed: string; submitted: string; picked: string; links: number }
     }
   }
 }

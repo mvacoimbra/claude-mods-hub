@@ -1,9 +1,9 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderElement, Timer } from 'claude-code'
 
-import type { ModsActArgs, ModsActResult, ModsItem, ModsLang, ModsPanel, ModsPanelArgs, ModsTone } from '../types'
-import { componentsTab, DEMO_START } from './components'
-import type { DemoState, DemoUi } from './components'
+import type { ModsActArgs, ModsActResult, ModsCatalogEntry, ModsItem, ModsLang, ModsPanel, ModsPanelArgs, ModsTone } from '../types'
+import { componentsTab, DEMO_START, DEMO_WORDS } from './components'
+import type { DemoCatalog, DemoState, DemoUi } from './components'
 import { HUB_STRINGS } from './i18n'
 import type { HubStrings } from './i18n'
 
@@ -17,6 +17,9 @@ export const MODS: readonly { noun: string; name: string }[] = [
   { noun: 'savvy', name: 'savvy-progress' },
   { noun: 'replay', name: 'replay-theater' },
 ]
+
+// The mods whose components the Components tab names; blast-radius has a catalog and no tab.
+export const CATALOGS: readonly { noun: string; name: string }[] = [...MODS, { noun: 'blast', name: 'blast-radius' }]
 
 type Loaded = { noun: string; panel: ModsPanel; failed?: string }
 
@@ -62,8 +65,39 @@ async function actOn($: EngineInterface, noun: string, args: ModsActArgs): Promi
   }
 }
 
-// What a call to a noun nobody added throws: reading its method off undefined.
-const isAbsent = (error: unknown): boolean => error instanceof TypeError && /\b(panel|act)\b/.test(error.message)
+async function catalogOf($: EngineInterface, noun: string, args: ModsPanelArgs): Promise<ModsCatalogEntry[]> {
+  switch (noun) {
+    case 'cachetax':
+      return $.cachetax.catalog(args)
+    case 'skins':
+      return $.skins.catalog(args)
+    case 'filetree':
+      return $.filetree.catalog(args)
+    case 'savvy':
+      return $.savvy.catalog(args)
+    case 'replay':
+      return $.replay.catalog(args)
+    case 'blast':
+      return $.blast.catalog(args)
+    default:
+      throw new Error(`no mod named ${noun}`)
+  }
+}
+
+// What a call to a noun nobody added throws: reading its method off undefined, or calling a
+// method a mod's noun does not have.
+const isAbsent = (error: unknown): boolean => error instanceof TypeError && /\b(panel|act|catalog)\b/.test(error.message)
+
+// The open Mods section's catalog: null entries when the mod is absent or has none.
+async function loadCatalog($: EngineInterface, noun: string, args: ModsPanelArgs): Promise<DemoCatalog> {
+  const name = CATALOGS.find(mod => mod.noun === noun)?.name ?? noun
+
+  try {
+    return { noun, name, entries: await catalogOf($, noun, args) }
+  } catch (error) {
+    return isAbsent(error) ? { noun, name, entries: null } : { noun, name, entries: null, failed: messageOf(error) }
+  }
+}
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
@@ -358,6 +392,15 @@ export const register: Register = on => {
 
     const missing = MODS.filter(mod => !mods.some(present => present.noun === mod.noun)).map(mod => mod.name)
 
+    // The Components tab draws a mod's catalog only while its Mods section is open.
+    const demo = await read($, demoAtom)
+    const catalogMods = CATALOGS.filter(mod => mod.noun === 'blast' || mods.some(present => present.noun === mod.noun))
+    const openCatalog = demo.mod !== '' && catalogMods.some(mod => mod.noun === demo.mod) ? demo.mod : catalogMods[0]?.noun
+    const catalog =
+      tab === 'components' && demo.group === 'mods' && openCatalog !== undefined
+        ? await loadCatalog($, openCatalog, { lang, surface: e.surface, columns: Math.max(20, columns - 4) })
+        : null
+
     const settings = (
       <Box flexDirection="column" rowGap={1}>
         {row(
@@ -414,20 +457,39 @@ export const register: Register = on => {
           : tab === 'settings'
             ? settings
             : tab === 'components'
-              ? componentsTab(ui as unknown as DemoUi, e.surface, columns, lang, await read($, demoAtom), {
-                  section: id => void update($, demoAtom, demo => ({ ...demo, section: id })),
-                  click: () => void update($, demoAtom, demo => ({ ...demo, clicks: demo.clicks + 1 })),
-                  type: value => void update($, demoAtom, demo => ({ ...demo, typed: value })),
-                  submit: value => void update($, demoAtom, demo => ({ ...demo, submitted: value, typed: '' })),
-                  pick: value => void update($, demoAtom, demo => ({ ...demo, picked: value })),
-                  toast: () => $.ui.toast(t.toast),
-                  status: () =>
-                    void (async () => {
-                      const time = new Date(await $.clock.now()).toTimeString().slice(0, 8)
-                      $.ui.status(t.status(time))
-                      $.clock.after(8000, () => $.ui.status(undefined))
-                    })(),
-                })
+              ? componentsTab(
+                  ui as unknown as DemoUi,
+                  e.surface,
+                  columns,
+                  lang,
+                  demo,
+                  {
+                    group: id => void update($, demoAtom, d => ({ ...d, group: id })),
+                    element: id => void update($, demoAtom, d => ({ ...d, element: id })),
+                    mod: noun => void update($, demoAtom, d => ({ ...d, mod: noun })),
+                    click: () => void update($, demoAtom, d => ({ ...d, clicks: d.clicks + 1 })),
+                    type: value => void update($, demoAtom, d => ({ ...d, typed: value })),
+                    submit: value => void update($, demoAtom, d => ({ ...d, submitted: value, typed: '' })),
+                    pick: value => void update($, demoAtom, d => ({ ...d, picked: value })),
+                    link: () => void update($, demoAtom, d => ({ ...d, links: d.links + 1 })),
+                    toast: () => $.ui.toast(t.toast),
+                    notify: () => void $.ui.notify(t.toast, { title: 'mods' }).catch(error => $.ui.toast(messageOf(error))),
+                    ask: () =>
+                      void $.ui
+                        .ask(DEMO_WORDS[lang].outside.askQuestion, ['Box', 'Text', 'Button'])
+                        .then(answer => $.ui.toast(`$.ui.ask → ${answer}`))
+                        .catch(error => $.ui.toast(messageOf(error))),
+                    status: () =>
+                      void (async () => {
+                        const time = new Date(await $.clock.now()).toTimeString().slice(0, 8)
+                        $.ui.status(t.status(time))
+                        $.clock.after(8000, () => $.ui.status(undefined))
+                      })(),
+                    copy: () => void $.ui.copy({ text: 'copied by /mods' }).then(result => $.ui.toast(result.isCopied ? '$.ui.copy → ok' : '$.ui.copy → not here')),
+                  },
+                  catalogMods,
+                  catalog,
+                )
               : current === undefined
                 ? overview
                 : modTab(current)}
