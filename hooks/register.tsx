@@ -1,7 +1,12 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderElement, Timer } from 'claude-code'
 
-import type { ModsActArgs, ModsActResult, ModsCatalogEntry, ModsItem, ModsLang, ModsPanel, ModsPanelArgs, ModsTone } from '../types'
+import { action, choice, dot, empty, field, icon, kitOf, row, section, stack, status, swatch, text, toggle } from '../kit/kit'
+import type { Kit } from '../kit/kit'
+import type { IconName } from '../kit/icons'
+import { toneOf } from '../kit/tone'
+import type { KitSkin } from '../kit/tone'
+import type { ModsActArgs, ModsActResult, ModsCatalogEntry, ModsItem, ModsLang, ModsPanel, ModsPanelArgs } from '../types'
 import { componentsTab, DEMO_START, DEMO_WORDS } from './components'
 import type { DemoCatalog, DemoState, DemoUi } from './components'
 import { HUB_STRINGS } from './i18n'
@@ -9,22 +14,21 @@ import type { HubStrings } from './i18n'
 
 const PANE = 'mods'
 
-// The mods that join the pane, by the noun each adds to `$`, in tab order.
-export const MODS: readonly { noun: string; name: string }[] = [
-  { noun: 'cachetax', name: 'cache-tax' },
-  { noun: 'skins', name: 'skins' },
-  { noun: 'filetree', name: 'filetree' },
-  { noun: 'savvy', name: 'savvy-progress' },
-  { noun: 'replay', name: 'replay-theater' },
+// The mods that join the pane, by the noun each adds to `$`, in list order, with their icon.
+export const MODS: readonly { noun: string; name: string; icon: IconName }[] = [
+  { noun: 'cachetax', name: 'cache-tax', icon: 'cache' },
+  { noun: 'skins', name: 'skins', icon: 'skins' },
+  { noun: 'filetree', name: 'filetree', icon: 'folder' },
+  { noun: 'savvy', name: 'savvy-progress', icon: 'agents' },
+  { noun: 'replay', name: 'replay-theater', icon: 'replay' },
 ]
 
 // The mods whose components the Components tab names; blast-radius has a catalog and no tab.
-export const CATALOGS: readonly { noun: string; name: string }[] = [...MODS, { noun: 'blast', name: 'blast-radius' }]
+export const CATALOGS: readonly { noun: string; name: string; icon: IconName }[] = [...MODS, { noun: 'blast', name: 'blast-radius', icon: 'shield' }]
 
 type Loaded = { noun: string; panel: ModsPanel; failed?: string }
 
 const tabAtom = atom({ plugin: 'mods', key: 'tab' } as const, 'overview')
-const sectionsAtom = atom({ plugin: 'mods', key: 'sections' } as const, {} as Record<string, string>)
 const revisionAtom = atom({ plugin: 'mods', key: 'revision' } as const, 0)
 const langAtom = atom({ plugin: 'mods', key: 'lang' } as const, 'en' as ModsLang)
 const demoAtom = atom({ plugin: 'mods', key: 'demo' } as const, DEMO_START as DemoState)
@@ -86,7 +90,20 @@ async function catalogOf($: EngineInterface, noun: string, args: ModsPanelArgs):
 
 // What a call to a noun nobody added throws: reading its method off undefined, or calling a
 // method a mod's noun does not have.
-const isAbsent = (error: unknown): boolean => error instanceof TypeError && /\b(panel|act|catalog)\b/.test(error.message)
+const isAbsent = (error: unknown): boolean => error instanceof TypeError && /\b(panel|act|catalog|palette)\b/.test(error.message)
+
+// The skin every mod wears, from skins; Claude Code's own colours without it.
+async function skinOf($: EngineInterface): Promise<KitSkin | null> {
+  try {
+    return await $.skins.palette()
+  } catch (error) {
+    if (!isAbsent(error)) {
+      $.ui.log(`mods: no palette from skins: ${messageOf(error)}`, { to: 'debug' })
+    }
+
+    return null
+  }
+}
 
 // The open Mods section's catalog: null entries when the mod is absent or has none.
 async function loadCatalog($: EngineInterface, noun: string, args: ModsPanelArgs): Promise<DemoCatalog> {
@@ -115,18 +132,15 @@ async function loadAll($: EngineInterface, args: ModsPanelArgs): Promise<Loaded[
   return loaded.filter((mod): mod is Loaded => mod !== null)
 }
 
-const TONES: Readonly<Record<ModsTone, string>> = { ok: 'success', warn: 'warning', err: 'error', muted: 'subtle', accent: 'claude' }
+// The pane's language lives in the user's store, so every session and project shows the
+// same one; the atom only carries it between draws of one session.
+async function langOf($: EngineInterface): Promise<ModsLang> {
+  const stored = await $.store.get('lang')
 
-const toneOf = (tone: ModsTone | undefined): string => (tone === undefined ? 'text' : TONES[tone])
+  return stored === 'pt' ? 'pt' : 'en'
+}
 
-const mark = (on: boolean): string => (on ? '●' : '○')
-
-// Each option is a name, its control and one line of help: beside the control in a wide pane,
-// under it in a narrow one.
-const NAME_COLUMNS = 24
-const WIDE = 72
-
-// The redraw tick of a tab that counts down, and how often it runs.
+// The redraw tick of a view that counts down, and how often it runs.
 let ticker: Timer | undefined
 let tickMs = 0
 
@@ -144,18 +158,58 @@ function setTicker($: EngineInterface, ms: number): void {
   }
 }
 
-export const register: Register = on => {
+// Swatches next to each other share one wrapped grid, and so do actions with no help, as one
+// row of buttons; every other item is a row of its own.
+type Swatch = Extract<ModsItem, { kind: 'swatch' }>
+type Action = Extract<ModsItem, { kind: 'action' }>
+type Run = { kind: 'one'; item: ModsItem; index: number } | { kind: 'swatches'; items: Swatch[] } | { kind: 'actions'; items: Action[] }
 
+const isBare = (item: ModsItem): item is Action => item.kind === 'action' && item.help === undefined
+
+function runsOf(list: readonly ModsItem[]): Run[] {
+  const runs: Run[] = []
+
+  list.forEach((item, index) => {
+    const last = runs.at(-1)
+
+    if (item.kind === 'swatch') {
+      if (last?.kind === 'swatches') {
+        last.items.push(item)
+      } else {
+        runs.push({ kind: 'swatches', items: [item] })
+      }
+    } else if (isBare(item)) {
+      if (last?.kind === 'actions') {
+        last.items.push(item)
+      } else {
+        runs.push({ kind: 'actions', items: [item] })
+      }
+    } else {
+      runs.push({ kind: 'one', item, index })
+    }
+  })
+
+  return runs
+}
+
+// Only a live state earns colour and a dot: ok, warn or err. Accent and muted read as plain.
+const isState = (tone: string | undefined): tone is 'ok' | 'warn' | 'err' => tone === 'ok' || tone === 'warn' || tone === 'err'
+
+// Choices short enough to sit at a row's end; the rest wrap under the label.
+const fitsAtEnd = (options: readonly { label: string }[], columns: number): boolean =>
+  options.length <= 3 && options.reduce((sum, option) => sum + option.label.length + 5, 0) <= Math.max(16, columns - 34)
+
+export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    const stored = await $.store.get('lang')
-    await update($, langAtom, () => (stored === 'pt' ? 'pt' : 'en'))
-    await $.command.register({ name: 'mods', description: HUB_STRINGS[stored === 'pt' ? 'pt' : 'en'].command, immediate: true })
+    const lang = await langOf($)
+    await update($, langAtom, () => lang)
+    await $.command.register({ name: 'mods', description: HUB_STRINGS[lang].command, immediate: true })
 
     return next(e)
   })
 
   on('command.run', { command: 'mods' }, async $ => {
-    const lang = await read($, langAtom)
+    const lang = await langOf($)
     await $.ui.open({ id: PANE, title: HUB_STRINGS[lang].title, focus: true, closeOnEscape: true })
 
     return {}
@@ -176,19 +230,18 @@ export const register: Register = on => {
       return <ui.Text>Open /mods in the terminal or the desktop app.</ui.Text>
     }
 
-    const { Box, Text, Button, Input } = ui
     await read($, revisionAtom)
-    const lang = await read($, langAtom)
-    const t: HubStrings = HUB_STRINGS[lang]
-    const sections = await read($, sectionsAtom)
+    const lang = await langOf($)
+    const w: HubStrings = HUB_STRINGS[lang]
     const columns = e.props.bodyColumns
-    const wide = columns >= WIDE
-    const mods = await loadAll($, { lang, surface: e.surface, columns: Math.max(20, columns - 2) })
+    const k: Kit = kitOf(ui, toneOf(await skinOf($)), e.surface, columns)
+    const { Box } = ui
+    const mods = await loadAll($, { lang, surface: e.surface, columns: Math.max(20, columns - 4) })
     const stored = await read($, tabAtom)
     const tab = stored === 'overview' || stored === 'settings' || stored === 'components' || mods.some(mod => mod.noun === stored) ? stored : 'overview'
     const current = mods.find(mod => mod.noun === tab)
 
-    // A countdown on the open tab draws again on its own; the overview shows every summary.
+    // A countdown in view draws again on its own; the overview shows every summary.
     const refresh = tab === 'overview' ? Math.min(...mods.map(mod => mod.panel.refreshMs ?? Infinity)) : (current?.panel.refreshMs ?? Infinity)
     setTicker($, Number.isFinite(refresh) ? Math.max(1000, refresh) : 0)
 
@@ -209,100 +262,43 @@ export const register: Register = on => {
         await update($, revisionAtom, n => n + 1)
       })()
 
-    const help = (text: string | undefined) =>
-      text === undefined ? null : (
-        <Box flexShrink={1} paddingLeft={wide ? 0 : 2}>
-          <Text color="subtle">{text}</Text>
-        </Box>
-      )
+    const toggleWords = { on: w.on, off: w.off, turnOn: w.turnOn, turnOff: w.turnOff }
 
-    const row = (key: string, label: string, text: string | undefined, control: RenderElement) => (
-      <Box key={`row-${key}`} flexDirection={wide ? 'row' : 'column'} columnGap={2}>
-        <Box flexDirection="row" columnGap={2} flexShrink={0}>
-          <Box width={NAME_COLUMNS} flexShrink={0}>
-            <Text color="text">{label}</Text>
-          </Box>
-          {control}
-        </Box>
-        {help(text)}
-      </Box>
-    )
+    // Help, with the session-only mark where an item is not the user's setting.
+    const helpOf = (entry: { help?: string; scope?: string }) =>
+      entry.scope === 'session' ? [entry.help, w.sessionOnly].filter(Boolean).join(' · ') : entry.help
 
-    const choiceButtons = (key: string, value: string, options: { value: string; label: string }[], choose: (value: string) => void) => (
-      <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
-        {options.map(option => (
-          <Button
-            key={`${key}-${option.value}`}
-            plain
-            dimColor={option.value !== value}
-            label={value === '' ? option.label : `${mark(option.value === value)} ${option.label}`}
-            onPress={() => choose(option.value)}
-          />
-        ))}
-      </Box>
-    )
-
-    const item = (noun: string, entry: ModsItem, index: number) => {
+    const item = (noun: string, entry: ModsItem, index: number): RenderElement | null => {
       const key = `item-${noun}-${'id' in entry ? entry.id : index}`
 
       switch (entry.kind) {
         case 'toggle':
-          return row(
-            key,
-            entry.label,
-            entry.help,
-            <Button
-              key={key}
-              plain
-              dimColor={!entry.value}
-              label={`${mark(entry.value)} ${entry.value ? t.on : t.off}`}
-              onPress={() => press(noun, entry.id, entry.value ? 'off' : 'on')}
-            />,
-          )
-        case 'choice':
-          return entry.options.length > 4 ? (
-            <Box key={`row-${key}`} flexDirection="column">
-              <Text color="text">{entry.label}</Text>
-              {help(entry.help)}
-              {choiceButtons(key, entry.value, entry.options, value => press(noun, entry.id, value))}
-            </Box>
-          ) : (
-            row(key, entry.label, entry.help, choiceButtons(key, entry.value, entry.options, value => press(noun, entry.id, value)))
-          )
+          return row(k, { key, label: entry.label, help: helpOf(entry), end: toggle(k, key, entry.value, next => press(noun, entry.id, next ? 'on' : 'off'), toggleWords) })
+        case 'choice': {
+          const picker = choice(k, key, entry.value, entry.options, value => press(noun, entry.id, value))
+
+          return fitsAtEnd(entry.options, columns)
+            ? row(k, { key, label: entry.label, help: helpOf(entry), end: picker })
+            : row(k, { key, label: entry.label, help: helpOf(entry), below: picker })
+        }
         case 'action':
-          return (
-            <Box key={`row-${key}`} flexDirection={wide ? 'row' : 'column'} columnGap={2}>
-              <Box flexShrink={0}>
-                <Button key={key} label={entry.label} variant={entry.primary ? 'primary' : 'secondary'} onPress={() => press(noun, entry.id)} />
-              </Box>
-              {help(entry.help)}
-            </Box>
-          )
+          return row(k, { key, label: helpOf(entry) ?? entry.label, end: action(k, key, entry.label, () => press(noun, entry.id), { primary: entry.primary === true }) })
         case 'input':
-          return (
-            <Box key={`row-${key}`} flexDirection="column">
-              <Input
-                key={key}
-                label={`${entry.label} `}
-                placeholder={entry.placeholder ?? ''}
-                value=""
-                submitLabel={entry.submitLabel ?? 'ok'}
-                onSubmit={(value: string) => press(noun, entry.id, value.trim())}
-              />
-              {help(entry.help)}
-            </Box>
-          )
+          return field(k, key, entry.label, entry.placeholder ?? '', value => press(noun, entry.id, value), {
+            submitLabel: entry.submitLabel ?? w.apply,
+            ...(helpOf(entry) ? { help: helpOf(entry)! } : {}),
+          })
         case 'info':
-          return row(key, entry.label, undefined, <Text color={toneOf(entry.tone)}>{entry.value}</Text>)
+          return row(k, { key, label: entry.label, muted: true, end: text(k, entry.value, entry.tone) })
         case 'text':
           return (
-            <Text key={key} color={toneOf(entry.tone ?? 'muted')}>
-              {entry.text}
-            </Text>
+            <Box key={key} paddingX={1}>
+              {text(k, entry.text, entry.tone ?? 'muted')}
+            </Box>
           )
         case 'tree':
           return (
-            <Box key={key} flexDirection="column">
+            <Box key={key} flexDirection="column" paddingX={1}>
               {entry.tree as RenderElement}
             </Box>
           )
@@ -311,86 +307,115 @@ export const register: Register = on => {
       }
     }
 
-    // Swatches next to each other share one grid; every other item is a row of its own.
-    const items = (noun: string, list: readonly ModsItem[]) => {
-      const out: RenderElement[] = []
-
-      for (let i = 0; i < list.length; i++) {
-        const entry = list[i]!
-
-        if (entry.kind !== 'swatch') {
-          const drawn = item(noun, entry, i)
-
-          if (drawn !== null) {
-            out.push(drawn)
-          }
-
-          continue
-        }
-
-        const run: Extract<ModsItem, { kind: 'swatch' }>[] = []
-
-        while (list[i]?.kind === 'swatch') {
-          run.push(list[i] as Extract<ModsItem, { kind: 'swatch' }>)
-          i++
-        }
-
-        i--
-        out.push(
-          <Box key={`swatches-${noun}-${run[0]?.id ?? i}`} flexDirection="row" flexWrap="wrap" columnGap={2}>
-            {run.map(swatch => (
-              <Box key={`swatch-box-${noun}-${swatch.id}`} flexDirection="row" columnGap={1} width={wide ? 30 : 26}>
-                <Text color="text">{swatch.selected ? '▸' : ' '}</Text>
-                <Text backgroundColor={swatch.color}>{'    '}</Text>
-                <Button key={`item-${noun}-${swatch.id}`} plain dimColor={!swatch.selected} label={swatch.label} onPress={() => press(noun, swatch.id)} />
-                <Text color="subtle">{swatch.color}</Text>
+    const items = (noun: string, list: readonly ModsItem[]) =>
+      runsOf(list).map(run => {
+        switch (run.kind) {
+          case 'one':
+            return item(noun, run.item, run.index)
+          case 'swatches':
+            return (
+              <Box key={`swatches-${noun}-${run.items[0]!.id}`} flexDirection="row" flexWrap="wrap" columnGap={2} paddingX={1}>
+                {run.items.map(entry => swatch(k, `item-${noun}-${entry.id}`, entry.label, entry.color, entry.selected, () => press(noun, entry.id)))}
               </Box>
-            ))}
-          </Box>,
-        )
-      }
+            )
+          case 'actions':
+            return (
+              <Box key={`actions-${noun}-${run.items[0]!.id}`} flexDirection="row" flexWrap="wrap" columnGap={1} paddingX={1}>
+                {run.items.map(entry => action(k, `item-${noun}-${entry.id}`, entry.label, () => press(noun, entry.id), { primary: entry.primary === true }))}
+              </Box>
+            )
+        }
+      })
 
-      return out
-    }
-
-    const tabs = (
-      <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
-        {[{ id: 'overview', title: t.overview }, ...mods.map(mod => ({ id: mod.noun, title: mod.panel.title })), { id: 'components', title: t.components }, { id: 'settings', title: t.settings }].map(
-          (entry, i) => (
-            <Button
-              key={`tab-${entry.id}`}
-              label={entry.title}
-              variant={entry.id === tab ? 'primary' : 'secondary'}
-              onPress={() => go(entry.id)}
-              {...(i < 9 ? { hotkey: String(i + 1) } : {})}
-            />
-          ),
-        )}
+    // The way back from a mod, Components or Settings, and the view's own title.
+    const header = (title: string, iconName: IconName, state?: RenderElement | null) => (
+      <Box key="header" flexDirection="column">
+        <Box flexDirection="row" columnGap={1} alignItems="center">
+          {icon(k, 'chevronLeft', 'muted', 14)}
+          {action(k, 'tab-overview', w.allMods, () => go('overview'), { hotkey: '0' })}
+        </Box>
+        <Box flexDirection="row" columnGap={1} alignItems="center" paddingX={1} paddingTop={1}>
+          {icon(k, iconName, undefined, 18)}
+          {text(k, title, undefined, { bold: true })}
+          <Box flexGrow={1} />
+          {state ?? null}
+        </Box>
       </Box>
     )
 
-    const overview = (
-      <Box flexDirection="column" rowGap={1}>
-        <Text color="subtle">{mods.length === 0 ? t.noMods : t.overviewHelp}</Text>
-        {mods.map(mod => (
-          <Box key={`overview-${mod.noun}`} flexDirection={wide ? 'row' : 'column'} columnGap={2}>
-            <Box flexDirection="row" columnGap={2} flexShrink={0}>
-              <Box width={NAME_COLUMNS} flexShrink={0}>
-                <Text bold color="text">
-                  {mod.panel.title}
-                </Text>
-              </Box>
-              <Button key={`open-${mod.noun}`} plain label={`${t.open} ›`} onPress={() => go(mod.noun)} />
-            </Box>
-            <Box flexShrink={1} paddingLeft={wide ? 0 : 2}>
-              <Text color={toneOf(mod.failed ? 'err' : (mod.panel.tone ?? 'muted'))}>{mod.failed ? t.failed(mod.failed) : (mod.panel.summary ?? '')}</Text>
-            </Box>
-          </Box>
-        ))}
-      </Box>
-    )
+    const stateOf = (mod: Loaded) =>
+      mod.failed ? status(k, w.couldNotDraw, 'err') : !mod.panel.summary ? null : isState(mod.panel.tone) ? status(k, mod.panel.summary, mod.panel.tone) : text(k, mod.panel.summary, 'muted')
+
+    const iconOf = (noun: string): IconName => CATALOGS.find(mod => mod.noun === noun)?.icon ?? 'mods'
 
     const missing = MODS.filter(mod => !mods.some(present => present.noun === mod.noun)).map(mod => mod.name)
+
+    const overview = stack(k, 'overview', [
+      mods.length === 0
+        ? empty(k, 'no-mods', w.noMods, w.noModsHint)
+        : section(
+            k,
+            'list-mods',
+            w.installed,
+            mods.map((mod, i) =>
+              row(k, {
+                key: `mod-${mod.noun}`,
+                label: mod.panel.title,
+                icon: iconOf(mod.noun),
+                help: mod.failed ? w.failed(mod.failed) : mod.panel.summary,
+                ...(mod.failed ? { helpTone: 'err' as const } : isState(mod.panel.tone) ? { helpTone: mod.panel.tone } : {}),
+                end: [
+                  ...(!mod.failed && isState(mod.panel.tone) ? [dot(k, mod.panel.tone)] : []),
+                  action(k, `open-${mod.noun}`, w.open, () => go(mod.noun), i < 9 ? { hotkey: String(i + 1) } : {}),
+                ],
+              }),
+            ),
+            mods.length === 1 ? w.oneMod : w.manyMods(mods.length),
+          ),
+      section(k, 'list-more', w.more, [
+        row(k, { key: 'components', label: w.components, help: w.componentsHelp, icon: 'components', end: action(k, 'tab-components', w.open, () => go('components')) }),
+        row(k, { key: 'settings', label: w.settings, help: w.settingsHelp, icon: 'settings', end: action(k, 'tab-settings', w.open, () => go('settings')) }),
+      ]),
+      missing.length > 0 ? <Box key="missing" paddingX={1}>{text(k, w.missing(missing.join(', ')), 'faint')}</Box> : null,
+    ])
+
+    const setLang = (value: string) =>
+      void (async () => {
+        const next: ModsLang = value === 'pt' ? 'pt' : 'en'
+        await $.store.set('lang', next)
+        await update($, langAtom, () => next)
+        await update($, revisionAtom, n => n + 1)
+      })()
+
+    const settings = stack(k, 'settings', [
+      header(w.settings, 'settings'),
+      section(k, 'settings-language', w.language, [
+        row(k, {
+          key: 'mods-lang',
+          label: w.language,
+          help: w.languageHelp,
+          end: choice(k, 'item-mods-lang', lang, [{ value: 'en', label: 'English' }, { value: 'pt', label: 'Português' }], setLang),
+        }),
+      ]),
+      section(k, 'settings-scope', w.scopeTitle, [
+        row(k, { key: 'scope-user', label: w.scopeUser, help: w.scopeUserHelp, icon: 'settings' }),
+        row(k, { key: 'scope-session', label: w.scopeSession, help: w.scopeSessionHelp, icon: 'clock' }),
+      ]),
+      section(k, 'settings-keys', w.keysTitle, [row(k, { key: 'keys', label: w.footer, muted: true })]),
+    ])
+
+    const modView = (mod: Loaded) => {
+      const { panel } = mod
+
+      return stack(k, `view-${mod.noun}`, [
+        header(panel.title, iconOf(mod.noun), stateOf(mod)),
+        mod.failed ? <Box key="failed" paddingX={1}>{text(k, w.failed(mod.failed), 'err')}</Box> : null,
+        ...panel.sections.map(entry =>
+          section(k, `section-${mod.noun}-${entry.id}`, entry.title, items(mod.noun, entry.items), undefined, entry.items.every(one => one.kind === 'info')),
+        ),
+        panel.sections.length === 0 && !mod.failed ? empty(k, 'nothing', w.nothingToSet) : null,
+      ])
+    }
 
     // The Components tab draws a mod's catalog only while its Mods section is open.
     const demo = await read($, demoAtom)
@@ -401,100 +426,47 @@ export const register: Register = on => {
         ? await loadCatalog($, openCatalog, { lang, surface: e.surface, columns: Math.max(20, columns - 4) })
         : null
 
-    const settings = (
-      <Box flexDirection="column" rowGap={1}>
-        {row(
-          'mods-lang',
-          t.language,
-          t.languageHelp,
-          choiceButtons('item-mods-lang', lang, [{ value: 'en', label: 'English' }, { value: 'pt', label: 'Português' }], value =>
-            void (async () => {
-              const next: ModsLang = value === 'pt' ? 'pt' : 'en'
-              await $.store.set('lang', next)
-              await update($, langAtom, () => next)
-            })(),
-          ),
-        )}
-        {missing.length > 0 ? <Text color="subtle">{t.missing(missing.join(', '))}</Text> : null}
-      </Box>
-    )
+    const components = () =>
+      stack(k, 'components', [
+        header(w.components, 'components'),
+        componentsTab(
+          ui as unknown as DemoUi,
+          k,
+          e.surface,
+          columns,
+          lang,
+          demo,
+          {
+            group: id => void update($, demoAtom, d => ({ ...d, group: id })),
+            element: id => void update($, demoAtom, d => ({ ...d, element: id })),
+            mod: noun => void update($, demoAtom, d => ({ ...d, mod: noun })),
+            click: () => void update($, demoAtom, d => ({ ...d, clicks: d.clicks + 1 })),
+            type: value => void update($, demoAtom, d => ({ ...d, typed: value })),
+            submit: value => void update($, demoAtom, d => ({ ...d, submitted: value, typed: '' })),
+            pick: value => void update($, demoAtom, d => ({ ...d, picked: value })),
+            link: () => void update($, demoAtom, d => ({ ...d, links: d.links + 1 })),
+            toast: () => $.ui.toast(w.toast),
+            notify: () => void $.ui.notify(w.toast, { title: 'mods' }).catch(error => $.ui.toast(messageOf(error))),
+            ask: () =>
+              void $.ui
+                .ask(DEMO_WORDS[lang].outside.askQuestion, ['Box', 'Text', 'Button'])
+                .then(answer => $.ui.toast(`$.ui.ask → ${answer}`))
+                .catch(error => $.ui.toast(messageOf(error))),
+            status: () =>
+              void (async () => {
+                const time = new Date(await $.clock.now()).toTimeString().slice(0, 8)
+                $.ui.status(w.status(time))
+                $.clock.after(8000, () => $.ui.status(undefined))
+              })(),
+            copy: () => void $.ui.copy({ text: 'copied by /mods' }).then(result => $.ui.toast(result.isCopied ? '$.ui.copy → ok' : '$.ui.copy → not here')),
+          },
+          catalogMods,
+          catalog,
+        ),
+      ])
 
-    const modTab = (mod: Loaded) => {
-      const { panel } = mod
-      const open = panel.sections.find(section => section.id === sections[mod.noun]) ?? panel.sections[0]
+    const view = tab === 'settings' ? settings : tab === 'components' ? components() : current === undefined ? overview : modView(current)
 
-      return (
-        <Box flexDirection="column" rowGap={1}>
-          {mod.failed ? <Text color="error">{t.failed(mod.failed)}</Text> : null}
-          {panel.summary ? <Text color={toneOf(panel.tone ?? 'muted')}>{panel.summary}</Text> : null}
-          {panel.sections.length > 1 ? (
-            <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
-              {panel.sections.map(section => (
-                <Button
-                  key={`section-${mod.noun}-${section.id}`}
-                  plain
-                  dimColor={section.id !== open?.id}
-                  label={`${mark(section.id === open?.id)} ${section.title}`}
-                  onPress={() => void update($, sectionsAtom, all => ({ ...all, [mod.noun]: section.id }))}
-                />
-              ))}
-            </Box>
-          ) : null}
-          {open === undefined ? null : (
-            <Box flexDirection="column" rowGap={1}>
-              {items(mod.noun, open.items)}
-            </Box>
-          )}
-        </Box>
-      )
-    }
-
-    return (
-      <Box flexDirection="column" rowGap={1}>
-        {tabs}
-        {tab === 'overview'
-          ? overview
-          : tab === 'settings'
-            ? settings
-            : tab === 'components'
-              ? componentsTab(
-                  ui as unknown as DemoUi,
-                  e.surface,
-                  columns,
-                  lang,
-                  demo,
-                  {
-                    group: id => void update($, demoAtom, d => ({ ...d, group: id })),
-                    element: id => void update($, demoAtom, d => ({ ...d, element: id })),
-                    mod: noun => void update($, demoAtom, d => ({ ...d, mod: noun })),
-                    click: () => void update($, demoAtom, d => ({ ...d, clicks: d.clicks + 1 })),
-                    type: value => void update($, demoAtom, d => ({ ...d, typed: value })),
-                    submit: value => void update($, demoAtom, d => ({ ...d, submitted: value, typed: '' })),
-                    pick: value => void update($, demoAtom, d => ({ ...d, picked: value })),
-                    link: () => void update($, demoAtom, d => ({ ...d, links: d.links + 1 })),
-                    toast: () => $.ui.toast(t.toast),
-                    notify: () => void $.ui.notify(t.toast, { title: 'mods' }).catch(error => $.ui.toast(messageOf(error))),
-                    ask: () =>
-                      void $.ui
-                        .ask(DEMO_WORDS[lang].outside.askQuestion, ['Box', 'Text', 'Button'])
-                        .then(answer => $.ui.toast(`$.ui.ask → ${answer}`))
-                        .catch(error => $.ui.toast(messageOf(error))),
-                    status: () =>
-                      void (async () => {
-                        const time = new Date(await $.clock.now()).toTimeString().slice(0, 8)
-                        $.ui.status(t.status(time))
-                        $.clock.after(8000, () => $.ui.status(undefined))
-                      })(),
-                    copy: () => void $.ui.copy({ text: 'copied by /mods' }).then(result => $.ui.toast(result.isCopied ? '$.ui.copy → ok' : '$.ui.copy → not here')),
-                  },
-                  catalogMods,
-                  catalog,
-                )
-              : current === undefined
-                ? overview
-                : modTab(current)}
-        <Text color="subtle">{t.footer}</Text>
-      </Box>
-    )
+    return view
   })
 }

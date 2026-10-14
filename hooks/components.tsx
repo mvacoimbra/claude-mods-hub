@@ -1,5 +1,7 @@
 import type { ElementTable, RenderElement, RenderSurface } from 'claude-code'
 
+import { choice, text } from '../kit/kit'
+import type { Kit } from '../kit/kit'
 import type { ModsCatalogEntry, ModsLang } from '../types'
 import type { DemoClientProps } from './demo-client'
 
@@ -309,6 +311,7 @@ function imagePixels(width: number, height: number): string {
 // does outside a drawing, and the named components of each installed mod.
 export function componentsTab(
   ui: DemoUi,
+  k: Kit,
   surface: RenderSurface,
   columns: number,
   lang: ModsLang,
@@ -331,23 +334,17 @@ export function componentsTab(
   // One prop in one value, named the way to ask for it: `Box · justifyContent: center`.
   const demo = (name: string, sample: RenderElement) => (
     <Box key={`demo-${name}`} flexDirection="column">
-      <Text color="claude">{name}</Text>
-      <Box paddingLeft={2} flexDirection="column">
+      {text(k, name, 'muted')}
+      <Box paddingLeft={2} paddingTop={0} flexDirection="column">
         {sample}
       </Box>
     </Box>
   )
-  const note = (text: string) => (
-    <Text key={`note-${text.slice(0, 24)}`} color="subtle">
-      {text}
-    </Text>
+  const note = (line: string) => (
+    <Box key={`note-${line.slice(0, 24)}`}>{text(k, line, 'muted')}</Box>
   )
   const picker = (prefix: string, ids: readonly string[], open: string, labels: (id: string) => string, press: (id: string) => void) => (
-    <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
-      {ids.map(id => (
-        <Button key={`${prefix}-${id}`} plain dimColor={id !== open} label={`${id === open ? '●' : '○'} ${labels(id)}`} onPress={() => press(id)} />
-      ))}
-    </Box>
+    <Box key={`picker-${prefix}`}>{choice(k, prefix, open, ids.map(id => ({ value: id, label: labels(id) })), press)}</Box>
   )
 
   const elementBody = (): RenderElement[] => {
@@ -528,10 +525,10 @@ export function componentsTab(
             {SITES.map(site => (
               <Box key={`site-${site}`} flexDirection="row" columnGap={2}>
                 <Box width={18} flexShrink={0}>
-                  <Text color="claude">{site}</Text>
+                  {text(k, site, 'accent')}
                 </Box>
                 <Box flexShrink={1}>
-                  <Text color="subtle">{w.sites[site]}</Text>
+                  {text(k, w.sites[site], 'muted')}
                 </Box>
               </Box>
             ))}
@@ -544,17 +541,15 @@ export function componentsTab(
             {w.outside.rows.map(([call, what]) => (
               <Box key={`outside-${call}`} flexDirection={columns >= 72 ? 'row' : 'column'} columnGap={2}>
                 <Box width={columns >= 72 ? 40 : undefined} flexShrink={0}>
-                  <Text color="claude">{call}</Text>
+                  {text(k, call, 'accent')}
                 </Box>
                 <Box flexShrink={1}>
-                  <Text color="subtle">{what}</Text>
+                  {text(k, what, 'muted')}
                 </Box>
               </Box>
             ))}
           </Box>,
-          <Text key="outside-try" bold>
-            {w.outside.try}
-          </Text>,
+          <Box key="outside-try">{text(k, w.outside.try, undefined, { bold: true })}</Box>,
           <Box key="outside-actions" flexDirection="row" flexWrap="wrap" columnGap={2}>
             <Button key="demo-toast" label={w.outside.toast} onPress={actions.toast} />
             <Button key="demo-notify" label={w.outside.notify} onPress={actions.notify} />
@@ -579,11 +574,11 @@ export function componentsTab(
                 note(w.mods.count(catalog.entries.length)),
                 ...catalog.entries.map((entry, i) => (
                   <Box key={`catalog-${catalog.noun}-${entry.id}`} flexDirection="column">
-                    <Text>
-                      <Text bold color="claude">{`${i + 1}. ${entry.name}`}</Text>
-                      <Text color="subtle">{`  id: ${entry.id}`}</Text>
-                    </Text>
-                    {entry.help === undefined ? null : <Text color="subtle">{entry.help}</Text>}
+                    <Box flexDirection="row" columnGap={2} flexWrap="wrap">
+                      {text(k, `${i + 1}. ${entry.name}`, undefined, { bold: true })}
+                      {text(k, entry.id, 'faint')}
+                    </Box>
+                    {entry.help === undefined ? null : text(k, entry.help, 'muted')}
                     <Box paddingLeft={2} flexDirection="column">
                       {entry.tree as RenderElement}
                     </Box>
@@ -596,8 +591,8 @@ export function componentsTab(
   }
 
   return (
-    <Box flexDirection="column" rowGap={1}>
-      <Text color="subtle">{w.intro}</Text>
+    <Box flexDirection="column" rowGap={1} paddingX={1}>
+      {text(k, w.intro, 'muted')}
       {picker('group', GROUPS, group, id => w.groups[id as (typeof GROUPS)[number]], actions.group)}
       {body()}
     </Box>
