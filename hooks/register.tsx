@@ -389,7 +389,7 @@ export const register: Register = on => {
 
     const settings = stack(k, 'settings', [
       header(w.settings, 'settings'),
-      section(k, 'settings-language', w.language, [
+      section(k, 'settings-language', w.general, [
         row(k, {
           key: 'mods-lang',
           label: w.language,
