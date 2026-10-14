@@ -130,7 +130,7 @@ function draw(theme, node, inText = false) {
     case 'Link':
       return `<a class="link"${key} style="${textStyle(theme, p)}">${p.label ? esc(p.label) : children(theme, node, true)}</a>`
     case 'Code':
-      return `<pre class="code"${key}>${esc(p.code ?? p.text ?? children(theme, node, true))}</pre>`
+      return `<pre class="code"${key}>${esc(p.source ?? p.code ?? p.text ?? children(theme, node, true))}</pre>`
     case 'Markdown':
       return `<div class="md"${key}>${esc(p.text ?? '')}</div>`
     case 'Svg': {
