@@ -1,6 +1,6 @@
 {
   "name": "mods",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "One /mods pane listing every installed mod: each mod's state, settings and actions, drawn in Claude Code's own idiom",
   "author": { "name": "mvacoimbra" },
   "license": "MIT",
