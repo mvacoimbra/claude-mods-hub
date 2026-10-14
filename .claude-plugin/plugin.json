@@ -1,7 +1,7 @@
 {
   "name": "mods",
-  "version": "0.3.0",
-  "description": "One /mods pane with a tab per installed mod: each mod's state, settings and actions in one place",
+  "version": "0.4.0",
+  "description": "One /mods pane listing every installed mod: each mod's state, settings and actions, drawn in Claude Code's own idiom",
   "author": { "name": "mvacoimbra" },
   "license": "MIT",
   "types": "./types/index.d.ts"
