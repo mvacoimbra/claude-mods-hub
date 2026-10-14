@@ -24,7 +24,7 @@ export type Tone = {
   readonly isNative: boolean
   readonly isLight: boolean
   // For SVG and mixing.
-  readonly hex: KitPalette & { readonly accent: string; readonly line: string; readonly hover: string; readonly faint: string }
+  readonly hex: KitPalette & { readonly accent: string; readonly line: string; readonly hover: string; readonly faint: string; readonly selected: string }
   // For an element's colour. `fg` is undefined on the native skin: the app's own text colour.
   readonly ink: {
     readonly fg: string | undefined
@@ -36,6 +36,8 @@ export type Tone = {
     readonly err: string
     readonly line: string
     readonly hover: string
+    // The background of the selected row: a tint of the accent.
+    readonly selected: string
   }
 }
 
@@ -77,7 +79,8 @@ export function toneOf(skin: KitSkin | null): Tone {
   const line = mix(palette.surface, palette.fg, isLight ? 0.14 : 0.16)
   const hover = mix(palette.surface, palette.fg, isLight ? 0.05 : 0.07)
   const faint = mix(palette.muted, palette.surface, 0.35)
-  const hex = { ...palette, accent: palette.user, line, hover, faint }
+  const selected = mix(palette.surface, palette.user, isLight ? 0.14 : 0.22)
+  const hex = { ...palette, accent: palette.user, line, hover, faint, selected }
 
   return {
     name,
@@ -85,8 +88,8 @@ export function toneOf(skin: KitSkin | null): Tone {
     isLight,
     hex,
     ink: isNative
-      ? { fg: undefined, muted: 'inactive', faint: 'subtle', accent: 'claude', ok: 'success', warn: 'warning', err: 'error', line, hover }
-      : { fg: palette.fg, muted: palette.muted, faint, accent: palette.user, ok: palette.ok, warn: palette.warn, err: palette.err, line, hover },
+      ? { fg: undefined, muted: 'inactive', faint: 'subtle', accent: 'claude', ok: 'success', warn: 'warning', err: 'error', line, hover, selected }
+      : { fg: palette.fg, muted: palette.muted, faint, accent: palette.user, ok: palette.ok, warn: palette.warn, err: palette.err, line, hover, selected },
   }
 }
 

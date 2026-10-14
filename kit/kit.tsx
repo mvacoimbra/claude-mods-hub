@@ -44,14 +44,15 @@ export const kitOf = (ui: KitUi, t: Tone, surface: RenderSurface, columns: numbe
 type Child = RenderElement | string | null | undefined | false
 
 // An icon, 16px; nothing on the terminal unless a fallback glyph is given.
-export function icon(k: Kit, name: IconName, tone?: KitTone, size = 16, fallback?: string): RenderElement | null {
+export function icon(k: Kit, name: IconName, tone?: KitTone | 'faint', size = 16, fallback?: string): RenderElement | null {
   if (k.vector) {
     const { Svg } = k.ui
+    const color = tone === 'faint' ? k.t.hex.faint : hexOf(k.t, tone ?? 'muted')
 
-    return <Svg source={iconSvg(name, hexOf(k.t, tone ?? 'muted'), size)} alt={name} width={size} height={size} />
+    return <Svg source={iconSvg(name, color, size)} alt={name} width={size} height={size} />
   }
 
-  return fallback === undefined ? null : <k.ui.Text color={inkOf(k.t, tone ?? 'muted')}>{fallback}</k.ui.Text>
+  return fallback === undefined ? null : <k.ui.Text color={tone === 'faint' ? k.t.ink.faint : inkOf(k.t, tone ?? 'muted')}>{fallback}</k.ui.Text>
 }
 
 // A small filled circle in a state's colour: the dot beside a live state.
@@ -84,16 +85,18 @@ export function text(k: Kit, content: Child | Child[], tone?: KitTone | 'faint',
   )
 }
 
-// A group's title, with optional muted detail at the right: `Look            4 on`.
-export function heading(k: Kit, title: string, detail?: string, key?: string): RenderElement {
+// A group's title, with optional muted detail and a control at the right:
+// `Finished              2  [Hide]`.
+export function heading(k: Kit, title: string, detail?: string, key?: string, end?: Child | Child[]): RenderElement {
   const { Box } = k.ui
 
   return (
-    <Box {...(key ? { key } : {})} flexDirection="row" columnGap={2} paddingX={1}>
+    <Box {...(key ? { key } : {})} flexDirection="row" columnGap={2} paddingX={1} alignItems="center">
       <Box flexGrow={1} flexShrink={1}>
         {text(k, title, undefined, { bold: true })}
       </Box>
       {detail ? text(k, detail, 'muted') : null}
+      {end ?? null}
     </Box>
   )
 }
@@ -110,13 +113,13 @@ export function group(k: Kit, key: string, rows: Child[], dense = false): Render
   )
 }
 
-// A titled group: the heading, then the outlined rows.
-export function section(k: Kit, key: string, title: string, rows: Child[], detail?: string, dense = false): RenderElement {
+// A titled group: the heading, then the outlined rows. `end` puts a control in the heading.
+export function section(k: Kit, key: string, title: string, rows: Child[], detail?: string, dense = false, end?: Child | Child[]): RenderElement {
   const { Box } = k.ui
 
   return (
     <Box key={`section-box-${key}`} flexDirection="column">
-      {heading(k, title, detail)}
+      {heading(k, title, detail, undefined, end)}
       {group(k, key, rows, dense)}
     </Box>
   )
@@ -128,8 +131,12 @@ export type RowArgs = {
   help?: string | undefined
   icon?: IconName | undefined
   iconTone?: KitTone | undefined
+  // Any leading element in place of the icon: a mascot, an avatar, a ring.
+  lead?: Child
   // Right-aligned: a control, a value, a state.
   end?: Child | Child[]
+  // A long value at the end wraps instead of pushing the row wider.
+  endWraps?: boolean
   // Under the label: a full-width control, a list of options that wraps.
   below?: Child | Child[]
   tone?: KitTone | undefined
@@ -144,7 +151,7 @@ export function row(k: Kit, args: RowArgs): RenderElement {
   const { Box } = k.ui
   const narrow = k.columns < 44
   const end = args.end === undefined || args.end === null ? null : (
-    <Box flexDirection="row" columnGap={1} alignItems="center" flexShrink={0}>
+    <Box flexDirection="row" columnGap={1} alignItems="center" flexShrink={args.endWraps ? 1 : 0} {...(args.endWraps ? { justifyContent: 'flex-end' } : {})}>
       {args.end}
     </Box>
   )
@@ -153,7 +160,7 @@ export function row(k: Kit, args: RowArgs): RenderElement {
     <Box key={`row-${args.key}`} flexDirection="column" paddingX={1} hover={{ backgroundColor: k.t.ink.hover }}>
       <Box flexDirection={narrow && end !== null && args.help ? 'column' : 'row'} columnGap={2} alignItems={narrow ? 'flex-start' : 'center'}>
         <Box flexDirection="row" columnGap={1} flexGrow={1} flexShrink={1} alignItems="flex-start">
-          {args.icon ? icon(k, args.icon, args.iconTone) : null}
+          {args.lead ?? (args.icon ? icon(k, args.icon, args.iconTone) : null)}
           <Box flexDirection="column" flexShrink={1}>
             {text(k, args.label, args.muted ? 'muted' : args.tone)}
             {args.help ? text(k, args.help, args.helpTone ?? 'muted') : null}
@@ -162,7 +169,7 @@ export function row(k: Kit, args: RowArgs): RenderElement {
         {end}
       </Box>
       {args.below === undefined || args.below === null ? null : (
-        <Box flexDirection="column" paddingTop={0} paddingLeft={args.icon && k.vector ? 3 : 0}>
+        <Box flexDirection="column" paddingTop={0} paddingLeft={(args.icon || args.lead) && k.vector ? 3 : 0}>
           {args.below}
         </Box>
       )}
@@ -221,7 +228,15 @@ export function toggle(k: Kit, key: string, on: boolean, flip: (next: boolean) =
 }
 
 // A press: the group's one main action in the accent, the rest native and quiet.
-export function action(k: Kit, key: string, label: string, press: () => void, opts: { primary?: boolean; hotkey?: string; dismiss?: boolean } = {}): RenderElement {
+// `focus` starts the keyboard there (Enter presses it): the safe choice of a dialog. `plain`
+// draws the terminal's `1: Label` survey row; the desktop draws its native button either way.
+export function action(
+  k: Kit,
+  key: string,
+  label: string,
+  press: () => void,
+  opts: { primary?: boolean; hotkey?: string; dismiss?: boolean; focus?: boolean; plain?: boolean; dim?: boolean } = {},
+): RenderElement {
   const { Button } = k.ui
 
   return (
@@ -231,6 +246,9 @@ export function action(k: Kit, key: string, label: string, press: () => void, op
       {...(opts.primary ? { variant: 'primary' } : {})}
       {...(opts.hotkey ? { hotkey: opts.hotkey } : {})}
       {...(opts.dismiss ? { role: 'dismiss' } : {})}
+      {...(opts.focus ? { autoFocus: true } : {})}
+      {...(opts.plain ? { plain: true } : {})}
+      {...(opts.dim ? { dimColor: true } : {})}
       onPress={press}
     />
   )
@@ -245,10 +263,12 @@ const RING_R = 7
 
 // A percent as a ring, the pack's one data glyph, with its label beside it: `◔ 42% context`.
 // `detail` follows in muted text, such as a reset countdown. The terminal draws a bar.
-export function meter(k: Kit, key: string, label: string, percent: number, detail?: string): RenderElement {
+// A usage fills toward warn (80%) and err (95%); a progress passes `tone` and keeps it, so
+// finishing never reads as a warning.
+export function meter(k: Kit, key: string, label: string, percent: number, detail?: string, fixed?: KitTone): RenderElement {
   const { Box, Svg } = k.ui
   const p = Math.max(0, Math.min(100, Math.round(percent)))
-  const tone: KitTone = p >= 95 ? 'err' : p >= 80 ? 'warn' : 'accent'
+  const tone: KitTone = fixed ?? (p >= 95 ? 'err' : p >= 80 ? 'warn' : 'accent')
 
   if (!k.vector) {
     const filled = Math.round(p / 12.5)
@@ -289,9 +309,9 @@ export function status(k: Kit, word: string, tone: KitTone): RenderElement {
 
 // A notice inside a pane or dialog: an icon in the state's colour, a title, a body. No
 // coloured side bar: the outline and the icon carry the state.
-export function notice(k: Kit, key: string, tone: KitTone, title: string, body?: Child | Child[], actions?: Child[]): RenderElement {
+export function notice(k: Kit, key: string, tone: KitTone, title: string, body?: Child | Child[], actions?: Child[], iconName?: IconName): RenderElement {
   const { Box } = k.ui
-  const name: IconName = tone === 'err' || tone === 'warn' ? 'alert' : tone === 'ok' ? 'check' : 'info'
+  const name: IconName = iconName ?? (tone === 'err' || tone === 'warn' ? 'alert' : tone === 'ok' ? 'check' : 'info')
 
   return (
     <Box key={key} flexDirection="column" borderStyle="round" borderColor={k.t.ink.line} paddingX={1} rowGap={0}>
@@ -367,5 +387,31 @@ export function stack(k: Kit, key: string, children: Child[], gap = 1): RenderEl
     <k.ui.Box key={key} flexDirection="column" rowGap={gap}>
       {children.filter(Boolean)}
     </k.ui.Box>
+  )
+}
+
+// A drawing made plain data, for a catalog another mod draws: a press cannot cross mods, so
+// a Button, Input, Select or Client becomes its label, and handlers are dropped.
+export function staticTree(node: unknown): unknown {
+  if (Array.isArray(node)) {
+    return node.map(staticTree)
+  }
+
+  if (node === null || typeof node !== 'object') {
+    return typeof node === 'function' ? undefined : node
+  }
+
+  const element = node as { type?: unknown; props?: Record<string, unknown> }
+
+  if (element.type === 'Button' || element.type === 'Input' || element.type === 'Select' || element.type === 'Client') {
+    const label = String(element.props?.label ?? element.props?.placeholder ?? element.props?.key ?? '')
+
+    return { type: 'Text', props: element.props?.dimColor === true ? { dimColor: true } : {}, children: [element.type === 'Button' ? `[ ${label} ]` : label] }
+  }
+
+  return Object.fromEntries(
+    Object.entries(element)
+      .filter(([key, value]) => key !== 'press' && typeof value !== 'function')
+      .map(([key, value]) => [key, key === 'props' && value !== null && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter(([, prop]) => typeof prop !== 'function')) : staticTree(value)]),
   )
 }

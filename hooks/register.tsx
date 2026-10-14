@@ -289,7 +289,7 @@ export const register: Register = on => {
             ...(helpOf(entry) ? { help: helpOf(entry)! } : {}),
           })
         case 'info':
-          return row(k, { key, label: entry.label, muted: true, end: text(k, entry.value, entry.tone) })
+          return row(k, { key, label: entry.label, muted: true, end: text(k, entry.value, entry.tone), endWraps: true })
         case 'text':
           return (
             <Box key={key} paddingX={1}>
