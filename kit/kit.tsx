@@ -107,7 +107,7 @@ export function group(k: Kit, key: string, rows: Child[], dense = false): Render
   const { Box } = k.ui
 
   return (
-    <Box key={key} flexDirection="column" borderStyle="round" borderColor={k.t.ink.line} paddingY={dense ? 0 : 1} rowGap={dense ? 0 : 1}>
+    <Box key={key} flexDirection="column" borderStyle="round" borderColor={k.t.ink.line} paddingY={1} rowGap={dense ? 0 : 1}>
       {rows.filter(Boolean)}
     </Box>
   )
@@ -194,6 +194,26 @@ export function choice(k: Kit, key: string, value: string, options: readonly Opt
         ),
       )}
     </Box>
+  )
+}
+
+// A choice of any size: a few options as native buttons, more than three as the native
+// select, so a long list never becomes a wall of buttons. `value` '' selects nothing.
+export function picker(k: Kit, key: string, value: string, options: readonly Option[], pick: (value: string) => void, label?: string): RenderElement {
+  const { Select } = k.ui
+
+  if (options.length <= 3 || Select === undefined) {
+    return choice(k, key, value, options, pick)
+  }
+
+  return (
+    <Select
+      key={key}
+      {...(label ? { label } : {})}
+      options={options.map(option => ({ value: option.value, label: option.label }))}
+      {...(value === '' ? {} : { value })}
+      onSelect={(next: string) => pick(next)}
+    />
   )
 }
 
@@ -391,10 +411,12 @@ export function stack(k: Kit, key: string, children: Child[], gap = 1): RenderEl
 }
 
 // A drawing made plain data, for a catalog another mod draws: a press cannot cross mods, so
-// a Button, Input, Select or Client becomes its label, and handlers are dropped.
-export function staticTree(node: unknown): unknown {
+// handlers are dropped and each control is drawn as its shape without its press. A Button is
+// a round hairline box around its label (filled with the accent when primary), a field or a
+// select a hairline box around its placeholder or value, a Client its props' summary.
+export function staticTree(node: unknown, t?: Tone): unknown {
   if (Array.isArray(node)) {
-    return node.map(staticTree)
+    return node.map(child => staticTree(child, t))
   }
 
   if (node === null || typeof node !== 'object') {
@@ -402,16 +424,41 @@ export function staticTree(node: unknown): unknown {
   }
 
   const element = node as { type?: unknown; props?: Record<string, unknown> }
+  const p = element.props ?? {}
+  const line = t?.ink.line ?? 'subtle'
 
-  if (element.type === 'Button' || element.type === 'Input' || element.type === 'Select' || element.type === 'Client') {
-    const label = String(element.props?.label ?? element.props?.placeholder ?? element.props?.key ?? '')
+  if (element.type === 'Button') {
+    const label = String(p.label ?? p.key ?? '')
+    const primary = p.variant === 'primary' && p.plain !== true
 
-    return { type: 'Text', props: element.props?.dimColor === true ? { dimColor: true } : {}, children: [element.type === 'Button' ? `[ ${label} ]` : label] }
+    return {
+      type: 'Box',
+      props: { borderStyle: 'round', borderColor: primary ? (t?.ink.accent ?? 'claude') : line, paddingX: 1, ...(primary ? { backgroundColor: t?.hex.accent ?? 'claude' } : {}) },
+      children: [{ type: 'Text', props: primary ? { color: '#ffffff', bold: true } : p.dimColor === true ? { color: t?.ink.muted ?? 'inactive' } : {}, children: [label] }],
+    }
+  }
+
+  if (element.type === 'Input' || element.type === 'Select') {
+    const options = Array.isArray(p.options) ? (p.options as { value: string; label?: string }[]) : []
+    const shown = element.type === 'Select' ? (options.find(option => option.value === p.value)?.label ?? String(p.value ?? options[0]?.label ?? '')) : String(p.value || p.placeholder || '')
+
+    return {
+      type: 'Box',
+      props: { flexDirection: 'row', columnGap: 1 },
+      children: [
+        ...(p.label ? [{ type: 'Text', props: {}, children: [String(p.label)] }] : []),
+        { type: 'Box', props: { borderStyle: 'round', borderColor: line, paddingX: 1 }, children: [{ type: 'Text', props: { color: t?.ink.muted ?? 'inactive' }, children: [element.type === 'Select' ? `${shown} ⌄` : shown] }] },
+      ],
+    }
+  }
+
+  if (element.type === 'Client') {
+    return { type: 'Text', props: { color: t?.ink.muted ?? 'inactive' }, children: [String(p.key ?? p.module ?? '')] }
   }
 
   return Object.fromEntries(
     Object.entries(element)
       .filter(([key, value]) => key !== 'press' && typeof value !== 'function')
-      .map(([key, value]) => [key, key === 'props' && value !== null && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter(([, prop]) => typeof prop !== 'function')) : staticTree(value)]),
+      .map(([key, value]) => [key, key === 'props' && value !== null && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter(([, prop]) => typeof prop !== 'function')) : staticTree(value, t)]),
   )
 }
