@@ -199,20 +199,23 @@ export function choice(k: Kit, key: string, value: string, options: readonly Opt
 
 // A choice of any size: a few options as native buttons, more than three as the native
 // select, so a long list never becomes a wall of buttons. `value` '' selects nothing.
-export function picker(k: Kit, key: string, value: string, options: readonly Option[], pick: (value: string) => void, label?: string): RenderElement {
+// With nothing selected, `prompt` is the first entry and the one shown ("Choose a length"),
+// never the select's generic placeholder; picking it does nothing.
+export function picker(k: Kit, key: string, value: string, options: readonly Option[], pick: (value: string) => void, prompt?: string): RenderElement {
   const { Select } = k.ui
 
   if (options.length <= 3 || Select === undefined) {
     return choice(k, key, value, options, pick)
   }
 
+  const none = value === '' && prompt !== undefined
+
   return (
     <Select
       key={key}
-      {...(label ? { label } : {})}
-      options={options.map(option => ({ value: option.value, label: option.label }))}
-      {...(value === '' ? {} : { value })}
-      onSelect={(next: string) => pick(next)}
+      options={[...(none ? [{ value: '', label: prompt }] : []), ...options.map(option => ({ value: option.value, label: option.label }))]}
+      {...(value === '' && !none ? {} : { value })}
+      onSelect={(next: string) => next !== '' && pick(next)}
     />
   )
 }
