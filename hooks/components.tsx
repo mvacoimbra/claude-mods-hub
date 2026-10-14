@@ -317,7 +317,7 @@ export function componentsTab(
   lang: ModsLang,
   state: DemoState,
   actions: DemoActions,
-  mods: readonly { noun: string; name: string }[],
+  mods: readonly { noun: string; name: string; slug?: string }[],
   catalog: DemoCatalog | null,
 ): RenderElement {
   const { Box, Text, Button, Input, Select, Link, Code, Markdown } = ui
@@ -571,7 +571,10 @@ export function componentsTab(
           ...(catalog === null || catalog.entries === null
             ? [note(catalog?.failed === undefined ? w.mods.noCatalog(catalog?.name ?? open) : w.mods.failed(catalog.failed))]
             : [
-                note(w.mods.count(catalog.entries.length)),
+                <Box key="catalog-count" flexDirection="row" columnGap={2}>
+                  {text(k, w.mods.count(catalog.entries.length), 'muted')}
+                  {text(k, mods.find(mod => mod.noun === catalog.noun)?.slug ?? '', 'faint')}
+                </Box>,
                 ...catalog.entries.map((entry, i) => (
                   <Box key={`catalog-${catalog.noun}-${entry.id}`} flexDirection="column">
                     <Box flexDirection="row" columnGap={2} flexWrap="wrap">

@@ -313,7 +313,9 @@ test('Your mods lists each installed mod’s named components, drawn, with their
     expect(await pane.find({ type: 'Text', text: 'cache-tax · cold' })).toBeDefined()
     expect(await pane.find({ key: 'catalog-skins' }), 'a mod that is not installed is not listed').toBeUndefined()
     await pane.press({ key: 'catalog-blast' })
-    expect(await pane.find({ type: 'Text', text: 'blast-radius is not installed, or has no catalog.' })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: 'Blast radius is not installed, or has no catalog.' })).toBeDefined()
+    // One name per mod: the chip says what the list says; the plugin's name is the faint note.
+    expect((await pane.find({ key: 'catalog-cachetax' }))?.props.label).toBe('Keep warm')
     await pane.press({ key: 'catalog-cachetax' })
     await pane.press({ key: 'group-elements' })
     await pane.press({ key: 'tab-overview' })
@@ -322,7 +324,7 @@ test('Your mods lists each installed mod’s named components, drawn, with their
 })
 
 
-test('a mod’s drawing with a Button in it is drawn as its label, never blanking the pane', async ($, on) => {
+test('a mod’s drawing with a Button in it is drawn as a button shape, never blanking the pane', async ($, on) => {
   stub(on)
   on('engine.create', async ($, e, next) => {
     const built = await next(e)
@@ -335,7 +337,8 @@ test('a mod’s drawing with a Button in it is drawn as its label, never blankin
   for (const surface of SURFACES) {
     const pane = await $.ui.mount({ ...PANE, surface })
     await pane.press({ key: 'open-cachetax' })
-    expect(await pane.find({ type: 'Text', text: '[ Dismiss ]' })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: 'Dismiss' })).toBeDefined()
+    expect(await pane.find({ type: 'Button', key: 'stray' } as any)).toBeUndefined()
     await pane.press({ key: 'tab-overview' })
     await pane.press({ key: 'tab-components' })
     await pane.press({ key: 'group-mods' })

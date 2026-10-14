@@ -1,11 +1,11 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderElement, Timer } from 'claude-code'
 
-import { action, choice, dot, empty, field, icon, kitOf, row, section, stack, staticTree, status, swatch, text, toggle } from '../kit/kit'
+import { action, choice, dot, empty, field, icon, kitOf, meter, picker, row, section, stack, staticTree, status, swatch, text, toggle } from '../kit/kit'
 import type { Kit } from '../kit/kit'
 import type { IconName } from '../kit/icons'
 import { toneOf } from '../kit/tone'
-import type { KitSkin } from '../kit/tone'
+import type { KitSkin, Tone } from '../kit/tone'
 import type { ModsActArgs, ModsActResult, ModsCatalogEntry, ModsItem, ModsLang, ModsPanel, ModsPanelArgs } from '../types'
 import { componentsTab, DEMO_START, DEMO_WORDS } from './components'
 import type { DemoCatalog, DemoState, DemoUi } from './components'
@@ -14,17 +14,20 @@ import type { HubStrings } from './i18n'
 
 const PANE = 'mods'
 
-// The mods that join the pane, by the noun each adds to `$`, in list order, with their icon.
-export const MODS: readonly { noun: string; name: string; icon: IconName }[] = [
-  { noun: 'cachetax', name: 'cache-tax', icon: 'cache' },
-  { noun: 'skins', name: 'skins', icon: 'skins' },
-  { noun: 'filetree', name: 'filetree', icon: 'folder' },
-  { noun: 'savvy', name: 'savvy-progress', icon: 'agents' },
-  { noun: 'replay', name: 'replay-theater', icon: 'replay' },
+// The mods that join the pane, by the noun each adds to `$`, in list order: the plugin's
+// name, the name a person sees (a mod's own panel title wins once it is loaded), its icon.
+type ModInfo = { noun: string; name: string; title: Readonly<Record<ModsLang, string>>; icon: IconName }
+
+export const MODS: readonly ModInfo[] = [
+  { noun: 'cachetax', name: 'cache-tax', title: { en: 'Keep warm', pt: 'Manter aquecido' }, icon: 'cache' },
+  { noun: 'skins', name: 'skins', title: { en: 'Skins', pt: 'Skins' }, icon: 'skins' },
+  { noun: 'filetree', name: 'filetree', title: { en: 'Files', pt: 'Arquivos' }, icon: 'folder' },
+  { noun: 'savvy', name: 'savvy-progress', title: { en: 'Agents', pt: 'Agentes' }, icon: 'agents' },
+  { noun: 'replay', name: 'replay-theater', title: { en: 'Replay', pt: 'Replay' }, icon: 'replay' },
 ]
 
-// The mods whose components the Components tab names; blast-radius has a catalog and no tab.
-export const CATALOGS: readonly { noun: string; name: string; icon: IconName }[] = [...MODS, { noun: 'blast', name: 'blast-radius', icon: 'shield' }]
+// The mods whose components the Components tab names; blast-radius has a catalog and no view.
+export const CATALOGS: readonly ModInfo[] = [...MODS, { noun: 'blast', name: 'blast-radius', title: { en: 'Blast radius', pt: 'Blast radius' }, icon: 'shield' }]
 
 type Loaded = { noun: string; panel: ModsPanel; failed?: string }
 
@@ -106,15 +109,13 @@ async function skinOf($: EngineInterface): Promise<KitSkin | null> {
 }
 
 // The open Mods section's catalog: null entries when the mod is absent or has none.
-async function loadCatalog($: EngineInterface, noun: string, args: ModsPanelArgs): Promise<DemoCatalog> {
-  const name = CATALOGS.find(mod => mod.noun === noun)?.name ?? noun
-
+async function loadCatalog($: EngineInterface, noun: string, args: ModsPanelArgs, name: string, t?: Tone): Promise<DemoCatalog> {
   try {
     // Another mod's drawing reaches the hub as data: anything that would need a handler
     // (a Button, a field) is drawn as its label, so one careless entry cannot blank the pane.
     const entries = await catalogOf($, noun, args)
 
-    return { noun, name, entries: entries.map(entry => ({ ...entry, tree: staticTree(entry.tree) })) }
+    return { noun, name, entries: entries.map(entry => ({ ...entry, tree: staticTree(entry.tree, t) })) }
   } catch (error) {
     return isAbsent(error) ? { noun, name, entries: null } : { noun, name, entries: null, failed: messageOf(error) }
   }
@@ -279,14 +280,19 @@ export const register: Register = on => {
         case 'toggle':
           return row(k, { key, label: entry.label, help: helpOf(entry), end: toggle(k, key, entry.value, next => press(noun, entry.id, next ? 'on' : 'off'), toggleWords) })
         case 'choice': {
-          const picker = choice(k, key, entry.value, entry.options, value => press(noun, entry.id, value))
+          const picked = picker(k, key, entry.value, entry.options, value => press(noun, entry.id, value))
 
           return fitsAtEnd(entry.options, columns)
-            ? row(k, { key, label: entry.label, help: helpOf(entry), end: picker })
-            : row(k, { key, label: entry.label, help: helpOf(entry), below: picker })
+            ? row(k, { key, label: entry.label, help: helpOf(entry), end: picked })
+            : row(k, { key, label: entry.label, help: helpOf(entry), below: picked })
         }
         case 'action':
-          return row(k, { key, label: helpOf(entry) ?? entry.label, end: action(k, key, entry.label, () => press(noun, entry.id), { primary: entry.primary === true }) })
+          return row(k, {
+            key,
+            label: entry.title ?? helpOf(entry) ?? entry.label,
+            help: entry.title === undefined ? undefined : helpOf(entry),
+            end: action(k, key, entry.label, () => press(noun, entry.id), { primary: entry.primary === true }),
+          })
         case 'input':
           return field(k, key, entry.label, entry.placeholder ?? '', value => press(noun, entry.id, value), {
             submitLabel: entry.submitLabel ?? w.apply,
@@ -303,7 +309,7 @@ export const register: Register = on => {
         case 'tree':
           return (
             <Box key={key} flexDirection="column" paddingX={1}>
-              {staticTree(entry.tree) as RenderElement}
+              {staticTree(entry.tree, k.t) as RenderElement}
             </Box>
           )
         case 'swatch':
@@ -347,12 +353,27 @@ export const register: Register = on => {
       </Box>
     )
 
+    // A progress the mod reports, as the pack's ring.
+    const ringOf = (mod: Loaded) => (mod.panel.percent === undefined ? null : meter(k, `ring-${mod.noun}`, '', mod.panel.percent, undefined, 'accent'))
+
     const stateOf = (mod: Loaded) =>
-      mod.failed ? status(k, w.couldNotDraw, 'err') : !mod.panel.summary ? null : isState(mod.panel.tone) ? status(k, mod.panel.summary, mod.panel.tone) : text(k, mod.panel.summary, 'muted')
+      mod.failed ? (
+        status(k, w.couldNotDraw, 'err')
+      ) : !mod.panel.summary ? (
+        ringOf(mod)
+      ) : (
+        <Box flexDirection="row" columnGap={1} alignItems="center" flexShrink={1}>
+          {ringOf(mod)}
+          {isState(mod.panel.tone) ? status(k, mod.panel.summary, mod.panel.tone) : text(k, mod.panel.summary, 'muted')}
+        </Box>
+      )
 
     const iconOf = (noun: string): IconName => CATALOGS.find(mod => mod.noun === noun)?.icon ?? 'mods'
 
-    const missing = MODS.filter(mod => !mods.some(present => present.noun === mod.noun)).map(mod => mod.name)
+    const missing = MODS.filter(mod => !mods.some(present => present.noun === mod.noun)).map(mod => mod.title[lang])
+
+    // One name per mod everywhere: its own panel title, or the table's when it has no view.
+    const titleOf = (noun: string): string => mods.find(mod => mod.noun === noun)?.panel.title || CATALOGS.find(mod => mod.noun === noun)?.title[lang] || noun
 
     const overview = stack(k, 'overview', [
       mods.length === 0
@@ -369,6 +390,7 @@ export const register: Register = on => {
                 help: mod.failed ? w.failed(mod.failed) : mod.panel.summary,
                 ...(mod.failed ? { helpTone: 'err' as const } : isState(mod.panel.tone) ? { helpTone: mod.panel.tone } : {}),
                 end: [
+                  ...(mod.failed ? [] : [ringOf(mod)]),
                   ...(!mod.failed && isState(mod.panel.tone) ? [dot(k, mod.panel.tone)] : []),
                   action(k, `open-${mod.noun}`, w.open, () => go(mod.noun), i < 9 ? { hotkey: String(i + 1) } : {}),
                 ],
@@ -423,11 +445,11 @@ export const register: Register = on => {
 
     // The Components tab draws a mod's catalog only while its Mods section is open.
     const demo = await read($, demoAtom)
-    const catalogMods = CATALOGS.filter(mod => mod.noun === 'blast' || mods.some(present => present.noun === mod.noun))
+    const catalogMods = CATALOGS.filter(mod => mod.noun === 'blast' || mods.some(present => present.noun === mod.noun)).map(mod => ({ noun: mod.noun, name: titleOf(mod.noun), slug: mod.name }))
     const openCatalog = demo.mod !== '' && catalogMods.some(mod => mod.noun === demo.mod) ? demo.mod : catalogMods[0]?.noun
     const catalog =
       tab === 'components' && demo.group === 'mods' && openCatalog !== undefined
-        ? await loadCatalog($, openCatalog, { lang, surface: e.surface, columns: Math.max(20, columns - 4) })
+        ? await loadCatalog($, openCatalog, { lang, surface: e.surface, columns: Math.max(20, columns - 4) }, titleOf(openCatalog), k.t)
         : null
 
     const components = () =>
