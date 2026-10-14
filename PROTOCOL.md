@@ -29,7 +29,8 @@ export type CachetaxTone = 'ok' | 'warn' | 'err' | 'muted' | 'accent'
 export type CachetaxItem =
   | { kind: 'toggle'; id: string; label: string; help?: string; value: boolean; scope?: CachetaxScope }
   | { kind: 'choice'; id: string; label: string; help?: string; value: string; options: { value: string; label: string }[]; scope?: CachetaxScope }
-  | { kind: 'action'; id: string; label: string; help?: string; primary?: boolean; scope?: CachetaxScope }
+  // `label` is the button's; `title` names the row, with `help` under it.
+  | { kind: 'action'; id: string; label: string; title?: string; help?: string; primary?: boolean; scope?: CachetaxScope }
   | { kind: 'input'; id: string; label: string; help?: string; placeholder?: string; submitLabel?: string; scope?: CachetaxScope }
   | { kind: 'info'; label: string; value: string; tone?: CachetaxTone }
   | { kind: 'text'; text: string; tone?: CachetaxTone }
@@ -47,6 +48,8 @@ export type CachetaxPanel = {
   // or err colours it and adds a dot; accent and muted draw it plain.
   summary?: string
   tone?: CachetaxTone
+  // A progress the summary reports (0 to 100), drawn as the pack's ring beside it.
+  percent?: number
   // Drawn one under another, each a titled group.
   sections: CachetaxSection[]
   // While this tab shows, the hub draws it again this often (a countdown).
@@ -83,8 +86,9 @@ on('cachetax.act', async ($, e) => ({ value: await actOn($, e) }))
   on the desktop, a switch with a button that says what pressing does (`● On` / `○ Off` on the
   terminal); `choice` one native button per option, the chosen one in the accent (an empty
   `value` marks none: a row of one-shot choices, such as "keep warm for 1h · 3h · 6h"), at the
-  row's end when short, under the name when not; `action` its help and the button, or, with no
-  help, a button in a row with the actions next to it; `input` a field whose submit is the
+  row's end when short, under the name when not; `action` its title (or its help) and the button,
+  or, with neither, a button in a row with the actions next to it; put a group's main action
+  last; `input` a field whose submit is the
   act, with the typed text as `value`; `info` a name and a value in its tone; `text` a line;
   `swatch` a colour chip in a grid with the swatches next to it; `tree` is drawn as handed
   over, so it carries no buttons of its own. A section of `info` items only is drawn dense.
