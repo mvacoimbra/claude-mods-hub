@@ -20,6 +20,7 @@ export type HubStrings = {
   turnOn: string
   turnOff: string
   apply: string
+  choose: string
   general: string
   language: string
   languageHelp: string
@@ -59,6 +60,7 @@ const en: HubStrings = {
   turnOn: 'Turn on',
   turnOff: 'Turn off',
   apply: 'Apply',
+  choose: 'Choose…',
   general: 'General',
   language: 'Language',
   languageHelp: 'For this pane and every mod view that speaks it',
@@ -98,6 +100,7 @@ const pt: HubStrings = {
   turnOn: 'Ligar',
   turnOff: 'Desligar',
   apply: 'Aplicar',
+  choose: 'Escolher…',
   general: 'Geral',
   language: 'Idioma',
   languageHelp: 'Deste painel e de cada mod que o fala',

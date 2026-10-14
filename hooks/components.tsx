@@ -165,7 +165,7 @@ const en: Words = {
     copy: 'copy',
   },
   mods: {
-    help: 'Every component your mods draw, by name and id: say "the <id> of <mod>" to ask for a change. Buttons show as their label here.',
+    help: 'Every component your mods draw, by name and id: say "the <id> of <mod>" to ask for a change. Controls are drawn in their shape here, without their press.',
     none: 'No installed mod has a catalog.',
     noCatalog: name => `${name} is not installed, or has no catalog.`,
     failed: e => `This catalog could not be drawn: ${e}`,
@@ -247,7 +247,7 @@ const pt: Words = {
     copy: 'copiar',
   },
   mods: {
-    help: 'Cada componente que os seus mods desenham, com nome e id: diga "o <id> do <mod>" para pedir uma mudança. Botões aparecem aqui como o rótulo.',
+    help: 'Cada componente que os seus mods desenham, com nome e id: diga "o <id> do <mod>" para pedir uma mudança. Aqui os controles aparecem no formato, sem a ação.',
     none: 'Nenhum mod instalado tem catálogo.',
     noCatalog: name => `${name} não está instalado, ou não tem catálogo.`,
     failed: e => `Este catálogo não pôde ser desenhado: ${e}`,

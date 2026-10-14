@@ -280,7 +280,7 @@ export const register: Register = on => {
         case 'toggle':
           return row(k, { key, label: entry.label, help: helpOf(entry), end: toggle(k, key, entry.value, next => press(noun, entry.id, next ? 'on' : 'off'), toggleWords) })
         case 'choice': {
-          const picked = picker(k, key, entry.value, entry.options, value => press(noun, entry.id, value))
+          const picked = picker(k, key, entry.value, entry.options, value => press(noun, entry.id, value), w.choose)
 
           return fitsAtEnd(entry.options, columns)
             ? row(k, { key, label: entry.label, help: helpOf(entry), end: picked })

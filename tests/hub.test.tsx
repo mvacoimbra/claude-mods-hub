@@ -221,6 +221,39 @@ test('the language is the user’s: another session’s pick shows the next time
   await again.unmount()
 })
 
+test('a long choice is a native select, and one with nothing chosen says what to do', async ($, on) => {
+  stub(on)
+  const asked: { id: string; value?: string }[] = []
+  on('engine.create', async ($, e, next) => {
+    const built = await next(e)
+    return { ...built, cachetax: { panel: async () => ({ title: '', sections: [] }), act: async () => ({}), catalog: async () => [] } }
+  })
+  const options = ['1h', '3h', '6h', '12h', '24h'].map(value => ({ value, label: value }))
+  on('cachetax.panel', () => ({ value: { title: 'Keep warm', sections: [{ id: 'warm', title: 'Keep warm', items: [{ kind: 'choice', id: 'window', label: 'Keep warm for', value: '', options }] }] } }))
+  on('cachetax.act', ($, e) => {
+    asked.push(e)
+    return { value: {} }
+  })
+
+  const pane = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await pane.press({ key: 'open-cachetax' })
+  const select = await pane.find({ key: 'item-cachetax-window' })
+  expect(select?.type).toBe('Select')
+  expect((select?.props.options as { label: string }[])[0]?.label).toBe('Choose…')
+  await pane.select({ key: 'item-cachetax-window', value: '6h' })
+  expect(asked.at(-1)).toEqual({ id: 'window', value: '6h' })
+  await pane.press({ key: 'tab-overview' })
+  await pane.unmount()
+})
+
+test('the not-installed line names mods the way the list does', async ($, on) => {
+  stub(on)
+  fakeMod(on)
+  const pane = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await pane.find({ type: 'Text', text: 'Not installed: Skins, Files, Agents, Replay' })).toBeDefined()
+  await pane.unmount()
+})
+
 test('a tab that counts down draws again on its own while it shows', async ($, on) => {
   const clock = stub(on)
   const asked = fakeMod(on)
