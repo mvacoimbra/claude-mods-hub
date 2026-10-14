@@ -24,6 +24,7 @@ export const MODS: readonly ModInfo[] = [
   { noun: 'filetree', name: 'filetree', title: { en: 'Files', pt: 'Arquivos' }, icon: 'folder' },
   { noun: 'savvy', name: 'savvy-progress', title: { en: 'Agents', pt: 'Agentes' }, icon: 'agents' },
   { noun: 'replay', name: 'replay-theater', title: { en: 'Replay', pt: 'Replay' }, icon: 'replay' },
+  { noun: 'reflect', name: 'reflect-mod', title: { en: 'Reflect', pt: 'Reflect' }, icon: 'reflect' },
 ]
 
 // The mods whose components the Components tab names; blast-radius has a catalog and no view.
@@ -50,6 +51,8 @@ async function panelOf($: EngineInterface, noun: string, args: ModsPanelArgs): P
       return $.savvy.panel(args)
     case 'replay':
       return $.replay.panel(args)
+    case 'reflect':
+      return $.reflect.panel(args)
     default:
       throw new Error(`no mod named ${noun}`)
   }
@@ -67,6 +70,8 @@ async function actOn($: EngineInterface, noun: string, args: ModsActArgs): Promi
       return $.savvy.act(args)
     case 'replay':
       return $.replay.act(args)
+    case 'reflect':
+      return $.reflect.act(args)
     default:
       throw new Error(`no mod named ${noun}`)
   }
@@ -84,6 +89,8 @@ async function catalogOf($: EngineInterface, noun: string, args: ModsPanelArgs):
       return $.savvy.catalog(args)
     case 'replay':
       return $.replay.catalog(args)
+    case 'reflect':
+      return $.reflect.catalog(args)
     case 'blast':
       return $.blast.catalog(args)
     default:

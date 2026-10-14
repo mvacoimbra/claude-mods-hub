@@ -250,7 +250,7 @@ test('the not-installed line names mods the way the list does', async ($, on) =>
   stub(on)
   fakeMod(on)
   const pane = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await pane.find({ type: 'Text', text: 'Not installed: Skins, Files, Agents, Replay' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Not installed: Skins, Files, Agents, Replay, Reflect' })).toBeDefined()
   await pane.unmount()
 })
 

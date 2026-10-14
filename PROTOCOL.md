@@ -16,6 +16,7 @@ tab is not drawn.
 | filetree | `$.filetree` |
 | savvy-progress | `$.savvy` |
 | replay-theater | `$.replay` |
+| reflect-mod | `$.reflect` |
 
 ## Adding the noun
 

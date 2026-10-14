@@ -13,6 +13,7 @@ commands, and every setting is the user's: the same in every session and project
 | Files | [filetree](https://github.com/mvacoimbra/claude-code-filetree) | Open or close the file tree, show another folder, and every filetree setting |
 | Agents | [savvy-progress](https://github.com/mvacoimbra/claude-kit) | Running, finished and planned subagents, the current flow, and the agents panel |
 | Replay | [replay-theater](https://github.com/mvacoimbra/claude-code-playground) | Step through the last turn's edits |
+| Reflect | [reflect-mod](https://github.com/mvacoimbra/claude-reflect) | Rules found in your corrections, to save to CLAUDE.md or skip, and the pause switch |
 | Components | | Everything a mod can draw or do, named and live: every element with every prop and value (Box, Text, Button, Input, Select, Link, Code, Markdown, Svg, Raster, Image, Client), the theme colours, the sites a mod draws in, the calls outside a drawing (toast, notify, ask, status, copy, panes), and every named component of each installed mod, from its catalog |
 | Settings | | The language of the pane and of every view (English or Português), and where settings live |
 

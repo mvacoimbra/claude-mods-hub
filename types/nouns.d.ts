@@ -17,6 +17,7 @@ declare module 'claude-code' {
     filetree: ModApi
     savvy: ModApi
     replay: ModApi
+    reflect: ModApi
     // blast-radius has no tab, only a catalog.
     blast: { catalog: (args: ModsPanelArgs) => Promise<ModsCatalogEntry[]> }
   }
