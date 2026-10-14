@@ -15,7 +15,8 @@ export type ModsScope = 'user' | 'session'
 export type ModsItem =
   | { kind: 'toggle'; id: string; label: string; help?: string; value: boolean; scope?: ModsScope }
   | { kind: 'choice'; id: string; label: string; help?: string; value: string; options: { value: string; label: string }[]; scope?: ModsScope }
-  | { kind: 'action'; id: string; label: string; help?: string; primary?: boolean; scope?: ModsScope }
+  // `label` is the button's; `title`, when given, names the row, with `help` under it.
+  | { kind: 'action'; id: string; label: string; title?: string; help?: string; primary?: boolean; scope?: ModsScope }
   | { kind: 'input'; id: string; label: string; help?: string; placeholder?: string; submitLabel?: string; scope?: ModsScope }
   | { kind: 'info'; label: string; value: string; tone?: ModsTone }
   | { kind: 'text'; text: string; tone?: ModsTone }
@@ -28,6 +29,8 @@ export type ModsPanel = {
   title: string
   summary?: string
   tone?: ModsTone
+  // A progress the summary reports, drawn as a ring beside it.
+  percent?: number
   sections: ModsSection[]
   refreshMs?: number
 }
