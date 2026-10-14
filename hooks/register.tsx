@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderElement, Timer } from 'claude-code'
 
-import { action, choice, dot, empty, field, icon, kitOf, row, section, stack, status, swatch, text, toggle } from '../kit/kit'
+import { action, choice, dot, empty, field, icon, kitOf, row, section, stack, staticTree, status, swatch, text, toggle } from '../kit/kit'
 import type { Kit } from '../kit/kit'
 import type { IconName } from '../kit/icons'
 import { toneOf } from '../kit/tone'
@@ -110,7 +110,11 @@ async function loadCatalog($: EngineInterface, noun: string, args: ModsPanelArgs
   const name = CATALOGS.find(mod => mod.noun === noun)?.name ?? noun
 
   try {
-    return { noun, name, entries: await catalogOf($, noun, args) }
+    // Another mod's drawing reaches the hub as data: anything that would need a handler
+    // (a Button, a field) is drawn as its label, so one careless entry cannot blank the pane.
+    const entries = await catalogOf($, noun, args)
+
+    return { noun, name, entries: entries.map(entry => ({ ...entry, tree: staticTree(entry.tree) })) }
   } catch (error) {
     return isAbsent(error) ? { noun, name, entries: null } : { noun, name, entries: null, failed: messageOf(error) }
   }
@@ -299,7 +303,7 @@ export const register: Register = on => {
         case 'tree':
           return (
             <Box key={key} flexDirection="column" paddingX={1}>
-              {entry.tree as RenderElement}
+              {staticTree(entry.tree) as RenderElement}
             </Box>
           )
         case 'swatch':

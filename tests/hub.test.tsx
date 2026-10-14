@@ -321,3 +321,28 @@ test('Your mods lists each installed mod’s named components, drawn, with their
   }
 })
 
+
+test('a mod’s drawing with a Button in it is drawn as its label, never blanking the pane', async ($, on) => {
+  stub(on)
+  on('engine.create', async ($, e, next) => {
+    const built = await next(e)
+    return { ...built, cachetax: { panel: async () => ({ title: '', sections: [] }), act: async () => ({}), catalog: async () => [] } }
+  })
+  const button = { type: 'Button', props: { key: 'stray', label: 'Dismiss' } }
+  on('cachetax.panel', () => ({ value: { title: 'Keep warm', sections: [{ id: 's', title: 'S', items: [{ kind: 'tree', tree: button }] }] } }))
+  on('cachetax.catalog', () => ({ value: [{ id: 'held', name: 'Held notice', tree: { type: 'Box', props: {}, children: [button] } }] }))
+
+  for (const surface of SURFACES) {
+    const pane = await $.ui.mount({ ...PANE, surface })
+    await pane.press({ key: 'open-cachetax' })
+    expect(await pane.find({ type: 'Text', text: '[ Dismiss ]' })).toBeDefined()
+    await pane.press({ key: 'tab-overview' })
+    await pane.press({ key: 'tab-components' })
+    await pane.press({ key: 'group-mods' })
+    await pane.press({ key: 'catalog-cachetax' })
+    expect(await pane.find({ type: 'Text', text: '1. Held notice' })).toBeDefined()
+    await pane.press({ key: 'group-elements' })
+    await pane.press({ key: 'tab-overview' })
+    await pane.unmount()
+  }
+})
