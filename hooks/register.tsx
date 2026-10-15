@@ -217,6 +217,11 @@ export const register: Register = on => {
     await update($, langAtom, () => lang)
     await $.command.register({ name: 'mods', description: HUB_STRINGS[lang].command, immediate: true })
 
+    // The user's choice to see the pane from the first moment, in every session.
+    if ((await $.store.get('openAtStart')) === true) {
+      await $.ui.open({ id: PANE, title: HUB_STRINGS[lang].title }).catch(() => undefined)
+    }
+
     return next(e)
   })
 
@@ -420,9 +425,27 @@ export const register: Register = on => {
         await update($, revisionAtom, n => n + 1)
       })()
 
+    const openAtStart = (await $.store.get('openAtStart')) === true
+
     const settings = stack(k, 'settings', [
       header(w.settings, 'settings'),
       section(k, 'settings-language', w.general, [
+        row(k, {
+          key: 'mods-start',
+          label: w.openAtStart,
+          help: w.openAtStartHelp,
+          end: toggle(
+            k,
+            'item-mods-start',
+            openAtStart,
+            next =>
+              void (async () => {
+                await $.store.set('openAtStart', next)
+                await update($, revisionAtom, n => n + 1)
+              })(),
+            toggleWords,
+          ),
+        }),
         row(k, {
           key: 'mods-lang',
           label: w.language,

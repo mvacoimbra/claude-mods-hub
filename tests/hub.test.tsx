@@ -382,3 +382,35 @@ test('a mod’s drawing with a Button in it is drawn as a button shape, never bl
     await pane.unmount()
   }
 })
+
+test('Open at start, the user’s choice, opens the pane when a session starts', async ($, on) => {
+  const held: Record<string, unknown> = {}
+  const opened: unknown[] = []
+  mock.clock(on, { now: 10_000 })
+  on('store.get', ($, e) => ({ value: held[e.key] }))
+  on('store.set', ($, e) => {
+    held[e.key] = e.value
+    return { value: undefined }
+  })
+  on('ui.open', ($, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('command.register', () => ({ value: { command: 'mods' } }))
+  on('session.start', () => ({ cwd: '/work' }))
+
+  await $.session.start({ surface: 'desktop', isInteractive: true, cwd: '/work' })
+  expect(opened).toEqual([])
+
+  const pane = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await pane.press({ key: 'tab-settings' })
+  expect((await pane.find({ key: 'item-mods-start' }))?.props.label).toBe('Turn on')
+  await pane.press({ key: 'item-mods-start' })
+  expect(held.openAtStart).toBe(true)
+  expect((await pane.find({ key: 'item-mods-start' }))?.props.label).toBe('Turn off')
+  await pane.press({ key: 'tab-overview' })
+  await pane.unmount()
+
+  await $.session.start({ surface: 'desktop', isInteractive: true, cwd: '/work' })
+  expect(opened).toEqual(['mods'])
+})

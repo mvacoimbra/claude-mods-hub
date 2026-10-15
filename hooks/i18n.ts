@@ -22,6 +22,8 @@ export type HubStrings = {
   apply: string
   choose: string
   general: string
+  openAtStart: string
+  openAtStartHelp: string
   language: string
   languageHelp: string
   scopeTitle: string
@@ -62,6 +64,8 @@ const en: HubStrings = {
   apply: 'Apply',
   choose: 'Choose…',
   general: 'General',
+  openAtStart: 'Open at start',
+  openAtStartHelp: 'Opens this pane whenever a session starts',
   language: 'Language',
   languageHelp: 'For this pane and every mod view that speaks it',
   scopeTitle: 'Where settings live',
@@ -102,6 +106,8 @@ const pt: HubStrings = {
   apply: 'Aplicar',
   choose: 'Escolher…',
   general: 'Geral',
+  openAtStart: 'Abrir ao iniciar',
+  openAtStartHelp: 'Abre este painel sempre que uma sessão começa',
   language: 'Idioma',
   languageHelp: 'Deste painel e de cada mod que o fala',
   scopeTitle: 'Onde os ajustes ficam',
